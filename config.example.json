@@ -1,0 +1,25 @@
+{
+  "jobTitles": ["Software Engineer", "Backend Engineer"],
+  "intervalMinutes": 30,
+  "email": {
+    "smtp": {
+      "host": "smtp.gmail.com",
+      "port": 587,
+      "user": "you@gmail.com",
+      "pass": "your-gmail-app-password"
+    },
+    "to": "you@gmail.com",
+    "from": "Job Alerts <you@gmail.com>"
+  },
+  "usajobs": {
+    "apiKey": "your-usajobs-api-key",
+    "userAgent": "you@gmail.com"
+  },
+  "companies": [
+    "airbnb",
+    "openai",
+    "plaid",
+    "dell",
+    { "source": "greenhouse", "slug": "stripe" }
+  ]
+}

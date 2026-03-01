@@ -1,0 +1,80 @@
+import type { Job } from "./types.js";
+
+interface USAJobsConfig {
+  apiKey: string;
+  userAgent: string;
+}
+
+interface USAJobsPosition {
+  PositionID: string;
+  PositionTitle: string;
+  OrganizationName: string;
+  PositionURI: string;
+  PositionLocation?: Array<{ LocationName?: string }>;
+  PublicationStartDate?: string;
+}
+
+export async function fetchUSAJobs(
+  jobTitles: string[],
+  config: USAJobsConfig
+): Promise<Job[]> {
+  const seen = new Set<string>();
+  const jobs: Job[] = [];
+
+  for (const title of jobTitles) {
+    const url = new URL("https://data.usajobs.gov/api/search");
+    url.searchParams.set("Keyword", title);
+    url.searchParams.set("ResultsPerPage", "50");
+
+    let res: Response;
+    try {
+      res = await fetch(url.toString(), {
+        headers: {
+          Host: "data.usajobs.gov",
+          "Authorization-Key": config.apiKey,
+          "User-Agent": config.userAgent,
+        },
+      });
+    } catch (err) {
+      console.error(`[usajobs] Network error for keyword "${title}":`, err);
+      continue;
+    }
+
+    if (!res.ok) {
+      console.error(
+        `[usajobs] HTTP ${res.status} for keyword "${title}"`
+      );
+      continue;
+    }
+
+    let data: { SearchResult?: { SearchResultItems?: Array<{ MatchedObjectDescriptor: USAJobsPosition }> } };
+    try {
+      data = (await res.json()) as typeof data;
+    } catch {
+      console.error(`[usajobs] Failed to parse JSON for keyword "${title}"`);
+      continue;
+    }
+
+    const items =
+      data?.SearchResult?.SearchResultItems ?? [];
+
+    for (const item of items) {
+      const pos = item.MatchedObjectDescriptor;
+      if (!pos?.PositionID || seen.has(pos.PositionID)) continue;
+      seen.add(pos.PositionID);
+
+      jobs.push({
+        id: pos.PositionID,
+        stateKey: `usajobs-${pos.PositionID}`,
+        title: pos.PositionTitle,
+        company: pos.OrganizationName ?? "U.S. Government",
+        url: pos.PositionURI,
+        source: "USAJobs",
+        location: pos.PositionLocation?.[0]?.LocationName,
+        postedAt: pos.PublicationStartDate,
+      });
+    }
+  }
+
+  return jobs;
+}

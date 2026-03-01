@@ -1,0 +1,6 @@
+[
+  { "id": "airbnb", "name": "Airbnb", "source": "greenhouse", "slug": "airbnb" },
+  { "id": "dell", "name": "Dell", "source": "workday", "company": "dell", "careerSite": "External", "subdomain": "wd1" },
+  { "id": "openai", "name": "OpenAI", "source": "ashby", "slug": "openai" },
+  { "id": "plaid", "name": "Plaid", "source": "lever", "slug": "plaid" }
+]

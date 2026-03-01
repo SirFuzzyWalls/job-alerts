@@ -1,0 +1,20 @@
+{
+  "name": "job-alerts",
+  "version": "1.0.0",
+  "description": "Local job alert notification system polling multiple ATS boards",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "check": "tsx src/index.ts --once"
+  },
+  "dependencies": {
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.9.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/nodemailer": "^6.4.14",
+    "@types/node-cron": "^3.0.11",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
