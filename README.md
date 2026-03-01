@@ -36,6 +36,66 @@ Open `config.json` and fill in your settings:
 
 ---
 
+## Email setup (Gmail)
+
+Gmail requires an **App Password** — a 16-character code that lets the app authenticate without your real password and without disabling account security. You need 2-Step Verification turned on first.
+
+### Step 1 — Enable 2-Step Verification
+
+If you haven't already:
+
+1. Go to your [Google Account security settings](https://myaccount.google.com/security)
+2. Under **"How you sign in to Google"**, click **2-Step Verification**
+3. Follow the prompts to turn it on
+
+### Step 2 — Create an App Password
+
+1. Go to [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (you must be signed in)
+2. In the **"App name"** field, type something like `job-alerts`
+3. Click **Create**
+4. Google shows a 16-character password — copy it now (it won't be shown again)
+
+> If you don't see the App Passwords page, make sure 2-Step Verification is fully enabled and that your account isn't a Google Workspace account with app passwords disabled by an admin.
+
+### Step 3 — Fill in `config.json`
+
+```json
+"email": {
+  "smtp": {
+    "host": "smtp.gmail.com",
+    "port": 587,
+    "user": "you@gmail.com",
+    "pass": "abcd efgh ijkl mnop"
+  },
+  "to": "you@gmail.com",
+  "from": "Job Alerts <you@gmail.com>"
+}
+```
+
+| Field | Value |
+|---|---|
+| `smtp.host` | `smtp.gmail.com` |
+| `smtp.port` | `587` (TLS/STARTTLS — recommended) |
+| `smtp.user` | Your full Gmail address |
+| `smtp.pass` | The 16-character app password (spaces are ignored, include or omit them) |
+| `to` | Where digests are sent — can be any address, including a different account |
+| `from` | The display name and address shown in the email — must match your Gmail address |
+
+### Using a different email provider
+
+Any SMTP provider works. Update `host` and `port` to match:
+
+| Provider | Host | Port |
+|---|---|---|
+| Outlook / Hotmail | `smtp.office365.com` | `587` |
+| Yahoo Mail | `smtp.mail.yahoo.com` | `587` |
+| Fastmail | `smtp.fastmail.com` | `587` |
+| Self-hosted / other | Your server's SMTP hostname | Usually `587` or `465` |
+
+For providers other than Gmail, use your regular account password or the provider's equivalent of an app password.
+
+---
+
 ## Adding companies to monitor
 
 ### Option 1 — String ID (recommended)
