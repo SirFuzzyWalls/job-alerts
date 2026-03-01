@@ -6,6 +6,46 @@ import { loadState, saveState } from "./state.js";
 import { sendDigest } from "./notifier.js";
 
 const onceMode = process.argv.includes("--once");
+const dryRunMode = process.argv.includes("--dry-run");
+
+async function runDryRun(): Promise<void> {
+  const config = loadConfig();
+
+  const companyList = (config.companies ?? [])
+    .map((c) => `${c.source}${"slug" in c ? `:${c.slug}` : ":" + c.company}`)
+    .join(", ");
+  console.log(
+    `[dry-run] Config OK. ${config.companies?.length ?? 0} company source(s): ${companyList || "(none)"}`
+  );
+  console.log(`[dry-run] Job title filters: ${config.jobTitles.join(", ")}`);
+  console.log("[dry-run] Fetching jobs (no email will be sent, no state saved)…\n");
+
+  const allJobs = await fetchAllJobs(config);
+
+  // Group by source+company for display
+  const bySource = new Map<string, typeof allJobs>();
+  for (const job of allJobs) {
+    const key = `${job.source} / ${job.company}`;
+    if (!bySource.has(key)) bySource.set(key, []);
+    bySource.get(key)!.push(job);
+  }
+
+  for (const [key, jobs] of bySource) {
+    console.log(`  ${key}: ${jobs.length} job(s) fetched`);
+  }
+
+  const matched = allJobs.filter((job) => matchesTitle(job.title, config.jobTitles));
+  console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Title matches: ${matched.length}`);
+
+  if (matched.length > 0) {
+    console.log("[dry-run] Matched jobs:");
+    for (const job of matched) {
+      console.log(`  · ${job.title} @ ${job.company} — ${job.url}`);
+    }
+  }
+
+  console.log("\n[dry-run] Done. No email sent, no state changed.");
+}
 
 async function runCheck(): Promise<void> {
   const config = loadConfig();
@@ -49,6 +89,11 @@ async function runCheck(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (dryRunMode) {
+    await runDryRun();
+    return;
+  }
+
   // Load config once to validate before scheduling
   const config = loadConfig();
 

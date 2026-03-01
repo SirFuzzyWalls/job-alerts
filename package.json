@@ -4,7 +4,8 @@
   "description": "Local job alert notification system polling multiple ATS boards",
   "scripts": {
     "start": "tsx src/index.ts",
-    "check": "tsx src/index.ts --once"
+    "check": "tsx src/index.ts --once",
+    "dry-run": "tsx src/index.ts --dry-run"
   },
   "dependencies": {
     "node-cron": "^3.0.3",
