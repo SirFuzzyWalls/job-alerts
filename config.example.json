@@ -15,11 +15,10 @@
     "apiKey": "your-usajobs-api-key",
     "userAgent": "you@gmail.com"
   },
-  "companies": [
-    "airbnb",
-    "openai",
-    "plaid",
-    "dell",
-    { "source": "greenhouse", "slug": "stripe" }
-  ]
+
+  "companies": "all",
+  "excludeCompanies": ["twitch", "nubank"],
+
+  "_companiesAlternative": "Or pick specific companies by ID from boards.json:",
+  "_companiesExample": ["airbnb", "openai", "stripe", "dell"]
 }

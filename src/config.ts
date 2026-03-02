@@ -44,7 +44,8 @@ interface RawConfig {
   intervalMinutes?: number;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
-  companies?: (string | CompanyConfig)[];
+  companies?: "all" | (string | CompanyConfig)[];
+  excludeCompanies?: string[];
 }
 
 export function loadConfig(): Config {
@@ -77,9 +78,18 @@ export function loadConfig(): Config {
   }
 
   const registry = loadRegistry();
-  const companies: CompanyConfig[] = (rawConfig.companies ?? []).map((entry) =>
-    resolveCompanyEntry(entry, registry)
-  );
+  const exclude = new Set(rawConfig.excludeCompanies ?? []);
+
+  let companies: CompanyConfig[];
+  if (rawConfig.companies === "all") {
+    companies = registry
+      .filter((b) => !exclude.has(b.id))
+      .map(({ id: _id, name: _name, ...cfg }) => cfg as CompanyConfig);
+  } else {
+    companies = (rawConfig.companies ?? []).map((entry) =>
+      resolveCompanyEntry(entry, registry)
+    );
+  }
 
   return {
     ...rawConfig,
