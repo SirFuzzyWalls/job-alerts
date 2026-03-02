@@ -2,3 +2,4 @@ node_modules/
 dist/
 config.json
 state.json
+seen_jobs.json
