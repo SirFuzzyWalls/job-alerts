@@ -40,7 +40,7 @@ async function runDryRun(): Promise<void> {
       matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
       matchesLocation(job.location, config.locations, config.sendIfNoLocation)
   );
-  console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Title matches: ${matched.length}`);
+  console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Matches: ${matched.length}`);
 
   if (matched.length > 0) {
     console.log("[dry-run] Matched jobs:");
