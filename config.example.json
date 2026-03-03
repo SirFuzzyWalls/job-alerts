@@ -1,6 +1,12 @@
 {
   "jobTitles": ["Software Engineer", "Backend Engineer"],
   "intervalMinutes": 30,
+  "stateRetentionDays": 90,
+
+  "_salaryNote": "Optional salary filter — remove or omit any of these to disable:",
+  "minSalary": 100000,
+  "sendIfNoSalary": true,
+
   "email": {
     "smtp": {
       "host": "smtp.gmail.com",

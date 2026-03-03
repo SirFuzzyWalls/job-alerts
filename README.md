@@ -28,6 +28,10 @@ Open `config.json` and fill in your settings:
 |---|---|
 | `jobTitles` | List of title strings to match against (case-insensitive substring) |
 | `intervalMinutes` | How often to poll in scheduled mode (default: 30) |
+| `stateRetentionDays` | How many days to remember seen jobs before pruning them (default: 90) |
+| `minSalary` | Optional — exclude jobs whose listed salary is entirely below this annual amount |
+| `maxSalary` | Optional — exclude jobs whose listed salary is entirely above this annual amount |
+| `sendIfNoSalary` | Whether to include jobs with no salary data when a salary filter is set (default: true) |
 | `email.smtp` | SMTP credentials for outbound email |
 | `email.to` | Address to send digests to |
 | `email.from` | From address shown in the email |
@@ -163,7 +167,8 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 [dry-run] Total fetched: 152 | Title matches: 9
 [dry-run] Matched jobs:
-  · Software Engineer @ Airbnb — https://…
+  · Software Engineer @ Airbnb | $150K–$200K/yr — https://…
+  · Backend Engineer @ Plaid — https://…
   …
 
 [dry-run] Done. No email sent, no state changed.
@@ -198,6 +203,7 @@ No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 ## How it works
 
 1. On each run, jobs are fetched from all configured sources in parallel.
-2. Job titles are matched case-insensitively against your `jobTitles` list.
-3. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted — with minute-level precision for same-day postings.
-4. Previously seen jobs are tracked in `state.json` (created automatically, do not commit). If the email send fails, state is not updated so jobs are retried next run.
+2. Job titles are matched case-insensitively against your `jobTitles` list. If salary filters are configured, jobs are also filtered by salary range (Lever, USAJobs, and Ashby expose salary data; Greenhouse and Workday do not).
+3. **First run:** all matches are silently marked as seen — no email is sent. This prevents a blast of hundreds of jobs on a fresh install. From the second run onward, only genuinely new postings trigger an email.
+4. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted (minute-level precision for same-day postings) and salary when available.
+5. Previously seen jobs are tracked in `seen_jobs.json` (created automatically, do not commit). Entries older than `stateRetentionDays` (default 90) are pruned on each run to keep the file bounded. If an email send fails, state is not updated so jobs are retried next run.
