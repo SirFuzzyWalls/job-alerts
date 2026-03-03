@@ -5,6 +5,7 @@
 
   "_salaryNote": "Optional salary filter — remove or omit any of these to disable:",
   "minSalary": 100000,
+  "maxSalary": 300000,
   "sendIfNoSalary": true,
 
   "email": {
