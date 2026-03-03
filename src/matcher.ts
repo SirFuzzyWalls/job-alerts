@@ -12,6 +12,20 @@
  *   "Engineer"                   → true  (keyword contains title)
  *   "Product Manager"            → false
  */
+export function matchesSalary(
+  salaryMin: number | undefined,
+  salaryMax: number | undefined,
+  configMin: number | undefined,
+  configMax: number | undefined,
+  sendIfNoSalary: boolean
+): boolean {
+  const hasNumeric = salaryMin !== undefined || salaryMax !== undefined;
+  if (!hasNumeric) return sendIfNoSalary;
+  if (configMin !== undefined && (salaryMax ?? salaryMin!) < configMin) return false;
+  if (configMax !== undefined && (salaryMin ?? salaryMax!) > configMax) return false;
+  return true;
+}
+
 export function matchesTitle(jobTitle: string, targets: string[]): boolean {
   const normalizedJob = jobTitle.toLowerCase();
 

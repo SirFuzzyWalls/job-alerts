@@ -6,6 +6,19 @@ interface LeverPosting {
   hostedUrl: string;
   categories?: { location?: string };
   createdAt?: number;
+  salaryRange?: { min?: number; max?: number; currency?: string; interval?: string };
+}
+
+function toAnnual(value: number, interval: string): number {
+  const i = interval.toLowerCase();
+  if (i === "hourly") return value * 2080;
+  if (i === "weekly") return value * 52;
+  if (i === "monthly") return value * 12;
+  return value; // yearly, per-year-salary, or unrecognized → assume annual
+}
+
+function fmtK(n: number): string {
+  return `$${Math.round(n / 1000)}K`;
 }
 
 export async function fetchLever(slug: string): Promise<Job[]> {
@@ -37,14 +50,33 @@ export async function fetchLever(slug: string): Promise<Job[]> {
     return [];
   }
 
-  return data.map((p) => ({
-    id: p.id,
-    stateKey: `lever-${slug}-${p.id}`,
-    title: p.text,
-    company: slug,
-    url: p.hostedUrl,
-    source: "Lever",
-    location: p.categories?.location,
-    postedAt: p.createdAt ? new Date(p.createdAt).toISOString() : undefined,
-  }));
+  return data.map((p) => {
+    const sr = p.salaryRange;
+    const interval = sr?.interval ?? "yearly";
+    const salaryMin = sr?.min != null ? toAnnual(sr.min, interval) : undefined;
+    const salaryMax = sr?.max != null ? toAnnual(sr.max, interval) : undefined;
+
+    let salary: string | undefined;
+    if (salaryMin != null && salaryMax != null) {
+      salary = `${fmtK(salaryMin)}–${fmtK(salaryMax)}/yr`;
+    } else if (salaryMin != null) {
+      salary = `${fmtK(salaryMin)}+/yr`;
+    } else if (salaryMax != null) {
+      salary = `up to ${fmtK(salaryMax)}/yr`;
+    }
+
+    return {
+      id: p.id,
+      stateKey: `lever-${slug}-${p.id}`,
+      title: p.text,
+      company: slug,
+      url: p.hostedUrl,
+      source: "Lever",
+      location: p.categories?.location,
+      postedAt: p.createdAt ? new Date(p.createdAt).toISOString() : undefined,
+      salary,
+      salaryMin,
+      salaryMax,
+    };
+  });
 }
