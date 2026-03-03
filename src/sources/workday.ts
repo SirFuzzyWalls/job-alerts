@@ -50,8 +50,8 @@ export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
     const rawPath = p.externalPath ?? "";
     const id = rawPath.split("/").pop() ?? String(i);
     const jobUrl = rawPath
-      ? `${baseUrl}${rawPath}`
-      : `${baseUrl}/${company}/${careerSite}/job/${id}`;
+      ? `${baseUrl}/en-US/${careerSite}${rawPath}`
+      : `${baseUrl}/en-US/${careerSite}/job/${id}`;
 
     return {
       id,
