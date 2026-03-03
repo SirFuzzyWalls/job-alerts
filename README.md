@@ -205,7 +205,7 @@ No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 ## How it works
 
 1. On each run, jobs are fetched from all configured sources in parallel.
-2. Job titles are matched case-insensitively against your `jobTitles` list. If salary filters are configured, jobs are also filtered by salary range (Lever, USAJobs, and Ashby expose salary data; Greenhouse and Workday do not).
+2. Job titles are matched case-insensitively against your `jobTitles` list. If salary filters are configured, jobs are also filtered by salary range (Lever, USAJobs, and Ashby expose salary data; Greenhouse and Workday do not). If `locations` is configured, jobs are filtered to those whose location contains any allowlist entry — `"United States"`, `"US"`, and `"USA"` are smart aliases that also match US state abbreviations (e.g. `"San Francisco, CA"`), so a single entry covers both in-office and US-specific remote postings.
 3. **First run:** all matches are silently marked as seen — no email is sent. This prevents a blast of hundreds of jobs on a fresh install. From the second run onward, only genuinely new postings trigger an email.
 4. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted (minute-level precision for same-day postings) and salary when available.
 5. Previously seen jobs are tracked in `seen_jobs.json` (created automatically, do not commit). Entries older than `stateRetentionDays` (default 90) are pruned on each run to keep the file bounded. If an email send fails, state is not updated so jobs are retried next run.
