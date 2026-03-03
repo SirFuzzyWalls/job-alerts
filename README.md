@@ -32,7 +32,8 @@ Open `config.json` and fill in your settings:
 | `email.to` | Address to send digests to |
 | `email.from` | From address shown in the email |
 | `usajobs.apiKey` | Optional — USAJobs API key for federal postings |
-| `companies` | List of companies to monitor (see below) |
+| `companies` | Which companies to monitor — see below |
+| `excludeCompanies` | IDs to skip when using `"all"` — see below |
 
 ---
 
@@ -96,34 +97,46 @@ For providers other than Gmail, use your regular account password or the provide
 
 ---
 
-## Adding companies to monitor
+## Choosing which companies to monitor
 
-### Option 1 — String ID (recommended)
+### Monitor all registered companies (recommended)
 
-Use an ID from the community registry (`boards.json`):
+Set `companies` to `"all"` to automatically monitor every company in `boards.json`. As the registry grows, new companies are picked up with no config changes needed.
 
 ```json
-"companies": ["airbnb", "openai", "plaid", "dell"]
+"companies": "all"
 ```
 
-### Option 2 — Inline object (escape hatch for unlisted companies)
+To skip specific companies, add their IDs to `excludeCompanies`:
 
-Specify the source and its parameters directly:
+```json
+"companies": "all",
+"excludeCompanies": ["twitch", "nubank"]
+```
+
+### Cherry-pick specific companies
+
+Use IDs from `boards.json`:
+
+```json
+"companies": ["airbnb", "openai", "stripe", "dell"]
+```
+
+### Add a company not in the registry
+
+Specify the ATS parameters directly as an inline object:
 
 ```json
 "companies": [
+  "airbnb",
   { "source": "greenhouse", "slug": "stripe" },
-  { "source": "lever", "slug": "reddit" },
-  { "source": "ashby", "slug": "linear" },
-  { "source": "workday", "company": "amazon", "careerSite": "External_Careers", "subdomain": "wd5" }
+  { "source": "lever", "slug": "somecompany" },
+  { "source": "ashby", "slug": "somecompany" },
+  { "source": "workday", "company": "acme", "careerSite": "External_Careers", "subdomain": "wd5" }
 ]
 ```
 
-You can mix both styles freely:
-
-```json
-"companies": ["airbnb", "openai", { "source": "greenhouse", "slug": "stripe" }]
-```
+You can mix IDs and inline objects freely. If you figure out the parameters for a new company, consider [opening a PR](#community-registry-boardsjson) to add it to the registry.
 
 ---
 
@@ -160,11 +173,11 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 ## Community registry (`boards.json`)
 
-`boards.json` is a community-maintained list of verified company boards. Using a registry ID is easier than looking up ATS-specific parameters (especially Workday's `careerSite` and `subdomain`).
+`boards.json` is a community-maintained list of ~65 verified company boards spanning Greenhouse, Ashby, Lever, and Workday. Using a registry ID is easier than looking up ATS-specific parameters yourself (especially Workday's `careerSite` and `subdomain` values).
 
 ### Adding a company via PR
 
-Find the company's ATS, then add a single JSON object to `boards.json` in alphabetical order by `name`:
+Find the company's ATS, then add a single JSON object to `boards.json`:
 
 **Greenhouse / Lever / Ashby:**
 ```json
@@ -173,10 +186,10 @@ Find the company's ATS, then add a single JSON object to `boards.json` in alphab
 
 **Workday:**
 ```json
-{ "id": "amazon", "name": "Amazon", "source": "workday", "company": "amazon", "careerSite": "External_Careers", "subdomain": "wd5" }
+{ "id": "acme", "name": "Acme Corp", "source": "workday", "company": "acme", "careerSite": "External_Careers", "subdomain": "wd5" }
 ```
 
-To find Workday params: go to the company's careers page and look at the URL — it typically follows the pattern `https://<subdomain>.wd<N>.myworkdayjobs.com/<careerSite>/`.
+To find Workday params: go to the company's careers page and look at the URL — it typically follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/<careerSite>/`.
 
 No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 
@@ -186,5 +199,5 @@ No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 
 1. On each run, jobs are fetched from all configured sources in parallel.
 2. Job titles are matched case-insensitively against your `jobTitles` list.
-3. Previously seen jobs are tracked in `state.json` (created automatically, do not commit).
-4. New matches are sent as an email digest. If the email send fails, state is not updated so jobs are retried next run.
+3. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted — with minute-level precision for same-day postings.
+4. Previously seen jobs are tracked in `state.json` (created automatically, do not commit). If the email send fails, state is not updated so jobs are retried next run.
