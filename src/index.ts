@@ -3,7 +3,7 @@ import { loadConfig } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
 import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
-import { sendDigest } from "./notifier.js";
+import { sendDigest, buildEmailBody } from "./notifier.js";
 
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
@@ -50,6 +50,9 @@ async function runDryRun(): Promise<void> {
     }
   }
 
+  console.log("\n--- Email preview ---");
+  console.log(buildEmailBody(matched, config.jobTitles, config.locations));
+  console.log("--- End of preview ---");
   console.log("\n[dry-run] Done. No email sent, no state changed.");
 }
 

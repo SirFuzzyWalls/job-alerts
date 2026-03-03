@@ -31,7 +31,7 @@ function sortedByDate(jobs: Job[]): Job[] {
   });
 }
 
-function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: string[]): string {
+export function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: string[]): string {
   const now = new Date();
   const lines: string[] = [
     `New job postings matching your alerts (${jobTitles.join(", ")}):`,
