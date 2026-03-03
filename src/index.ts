@@ -1,8 +1,8 @@
 import cron from "node-cron";
 import { loadConfig } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
-import { matchesTitle } from "./matcher.js";
-import { loadState, saveState } from "./state.js";
+import { matchesTitle, matchesSalary } from "./matcher.js";
+import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest } from "./notifier.js";
 
 const onceMode = process.argv.includes("--once");
@@ -34,13 +34,18 @@ async function runDryRun(): Promise<void> {
     console.log(`  ${key}: ${jobs.length} job(s) fetched`);
   }
 
-  const matched = allJobs.filter((job) => matchesTitle(job.title, config.jobTitles));
+  const matched = allJobs.filter(
+    (job) =>
+      matchesTitle(job.title, config.jobTitles) &&
+      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary)
+  );
   console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Title matches: ${matched.length}`);
 
   if (matched.length > 0) {
     console.log("[dry-run] Matched jobs:");
     for (const job of matched) {
-      console.log(`  · ${job.title} @ ${job.company} — ${job.url}`);
+      const salaryStr = job.salary ? ` | ${job.salary}` : "";
+      console.log(`  · ${job.title} @ ${job.company}${salaryStr} — ${job.url}`);
     }
   }
 
@@ -49,7 +54,8 @@ async function runDryRun(): Promise<void> {
 
 async function runCheck(): Promise<void> {
   const config = loadConfig();
-  const seen = loadState();
+  const { seen: rawSeen, isFirstRun } = loadState();
+  const seen = pruneState(rawSeen, config.stateRetentionDays);
 
   console.log(
     `[check] Fetching jobs for: ${config.jobTitles.join(", ")} …`
@@ -58,10 +64,28 @@ async function runCheck(): Promise<void> {
   const allJobs = await fetchAllJobs(config);
   console.log(`[check] Total jobs fetched: ${allJobs.length}`);
 
-  const newMatches = allJobs.filter(
+  const matches = allJobs.filter(
     (job) =>
-      matchesTitle(job.title, config.jobTitles) && !seen[job.stateKey]
+      matchesTitle(job.title, config.jobTitles) &&
+      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary)
   );
+
+  if (isFirstRun) {
+    const now = Date.now();
+    for (const job of matches) {
+      seen[job.stateKey] = now;
+    }
+    saveState(seen);
+    console.log(
+      `[check] First run — seeded ${matches.length} matching job(s) as seen. No email sent.`
+    );
+    console.log(
+      "[check] Future runs will only email genuinely new postings."
+    );
+    return;
+  }
+
+  const newMatches = matches.filter((job) => !seen[job.stateKey]);
 
   console.log(`[check] New matches: ${newMatches.length}`);
 
@@ -78,8 +102,9 @@ async function runCheck(): Promise<void> {
     return;
   }
 
+  const now = Date.now();
   for (const job of newMatches) {
-    seen[job.stateKey] = true;
+    seen[job.stateKey] = now;
   }
   saveState(seen);
 

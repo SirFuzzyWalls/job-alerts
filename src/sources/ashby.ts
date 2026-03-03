@@ -1,5 +1,13 @@
 import type { Job } from "./types.js";
 
+interface AshbyCompensationComponent {
+  compensationType: string;
+  interval: string;
+  currencyCode: string;
+  minValue?: number;
+  maxValue?: number;
+}
+
 interface AshbyJob {
   id: string;
   title: string;
@@ -8,10 +16,14 @@ interface AshbyJob {
   locationName?: string;
   publishedDate?: string;
   department?: { name?: string };
+  compensation?: {
+    compensationTierSummary?: string;
+    summaryComponents?: AshbyCompensationComponent[];
+  };
 }
 
 export async function fetchAshby(slug: string): Promise<Job[]> {
-  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}`;
+  const url = `https://api.ashbyhq.com/posting-api/job-board/${slug}?includeCompensation=true`;
 
   let res: Response;
   try {
@@ -38,16 +50,28 @@ export async function fetchAshby(slug: string): Promise<Job[]> {
 
   return (data.jobs ?? [])
     .filter((j) => j.isListed)
-    .map((j) => ({
-      id: j.id,
-      stateKey: `ashby-${slug}-${j.id}`,
-      title: j.title,
-      company: slug,
-      url:
-        j.jobUrl ??
-        `https://jobs.ashbyhq.com/${slug}/${j.id}`,
-      source: "Ashby",
-      location: j.locationName,
-      postedAt: j.publishedDate,
-    }));
+    .map((j) => {
+      const salary = j.compensation?.compensationTierSummary ?? undefined;
+
+      // Extract numeric salary from summaryComponents where type is Salary and interval is annual
+      const salarySummary = j.compensation?.summaryComponents?.find(
+        (c) => c.compensationType === "Salary" && c.interval.toUpperCase().includes("YEAR")
+      );
+      const salaryMin = salarySummary?.minValue;
+      const salaryMax = salarySummary?.maxValue;
+
+      return {
+        id: j.id,
+        stateKey: `ashby-${slug}-${j.id}`,
+        title: j.title,
+        company: slug,
+        url: j.jobUrl ?? `https://jobs.ashbyhq.com/${slug}/${j.id}`,
+        source: "Ashby",
+        location: j.locationName,
+        postedAt: j.publishedDate,
+        salary,
+        salaryMin,
+        salaryMax,
+      };
+    });
 }

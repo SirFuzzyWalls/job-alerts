@@ -37,6 +37,15 @@ export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
     return [];
   }
 
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    const snippet = (await res.text()).slice(0, 120).replace(/\s+/g, " ").trim();
+    console.error(
+      `[workday:${company}] Expected JSON but got "${contentType}" — body: ${snippet}`
+    );
+    return [];
+  }
+
   let data: { jobPostings?: WorkdayJobPosting[] };
   try {
     data = (await res.json()) as typeof data;

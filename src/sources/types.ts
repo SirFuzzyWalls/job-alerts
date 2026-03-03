@@ -7,4 +7,7 @@ export interface Job {
   source: string;
   location?: string;
   postedAt?: string;
+  salary?: string;     // human-readable, e.g. "$100K–$150K/yr"
+  salaryMin?: number;  // annual equivalent in local currency (for filtering)
+  salaryMax?: number;  // annual equivalent in local currency (for filtering)
 }

@@ -12,6 +12,17 @@ interface USAJobsPosition {
   PositionURI: string;
   PositionLocation?: Array<{ LocationName?: string }>;
   PublicationStartDate?: string;
+  SalaryMin?: string;
+  SalaryMax?: string;
+}
+
+function parseSalaryStr(s: string): number | undefined {
+  const n = parseFloat(s.replace(/[$,]/g, ""));
+  return isFinite(n) ? n : undefined;
+}
+
+function fmtK(n: number): string {
+  return `$${Math.round(n / 1000)}K`;
 }
 
 export async function fetchUSAJobs(
@@ -63,6 +74,16 @@ export async function fetchUSAJobs(
       if (!pos?.PositionID || seen.has(pos.PositionID)) continue;
       seen.add(pos.PositionID);
 
+      const salaryMin = pos.SalaryMin ? parseSalaryStr(pos.SalaryMin) : undefined;
+      const salaryMax = pos.SalaryMax ? parseSalaryStr(pos.SalaryMax) : undefined;
+
+      let salary: string | undefined;
+      if (salaryMin != null && salaryMax != null) {
+        salary = `${fmtK(salaryMin)}–${fmtK(salaryMax)}/yr`;
+      } else if (salaryMin != null) {
+        salary = `${fmtK(salaryMin)}+/yr`;
+      }
+
       jobs.push({
         id: pos.PositionID,
         stateKey: `usajobs-${pos.PositionID}`,
@@ -72,6 +93,9 @@ export async function fetchUSAJobs(
         source: "USAJobs",
         location: pos.PositionLocation?.[0]?.LocationName,
         postedAt: pos.PublicationStartDate,
+        salary,
+        salaryMin,
+        salaryMax,
       });
     }
   }

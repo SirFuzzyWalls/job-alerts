@@ -41,6 +41,7 @@ function buildEmailBody(jobs: Job[], jobTitles: string[]): string {
   for (const job of sortedByDate(jobs)) {
     const when = job.postedAt ? ` — ${timeAgo(job.postedAt, now)}` : "";
     lines.push(`• ${job.title} @ ${job.company} (${job.source})${when}`);
+    if (job.salary) lines.push(`  ${job.salary}`);
     if (job.location) lines.push(`  ${job.location}`);
     lines.push(`  ${job.url}`);
     lines.push("");
