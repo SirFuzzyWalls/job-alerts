@@ -8,8 +8,8 @@
   "maxSalary": 300000,
   "sendIfNoSalary": true,
 
-  "_locationNote": "Optional location allowlist — omit to include all locations:",
-  "locations": ["United States", "Remote", "San Francisco"],
+  "_locationNote": "Optional location allowlist — omit to include all locations. 'United States', 'USA', and 'US' are smart aliases that also match US state abbreviations (e.g. 'San Francisco, CA'). Add 'Remote' to also include jobs with no country specified:",
+  "locations": ["United States"],
   "sendIfNoLocation": true,
 
   "email": {
