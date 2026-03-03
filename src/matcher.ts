@@ -26,6 +26,22 @@ export function matchesSalary(
   return true;
 }
 
+const US_ALIASES = new Set(["united states", "united states of america", "usa", "us"]);
+
+// Comma-prefixed so ", CA" matches "San Francisco, CA" but not "Canada" or "Caracas"
+const US_STATE_PATTERNS = [
+  "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga",
+  "hi", "id", "il", "in", "ia", "ks", "ky", "la", "me", "md",
+  "ma", "mi", "mn", "ms", "mo", "mt", "ne", "nv", "nh", "nj",
+  "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri", "sc",
+  "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "dc",
+].map((s) => `, ${s}`);
+
+function matchesUsEntry(loc: string): boolean {
+  if (US_ALIASES.has(loc)) return true; // e.g. "Remote, United States"
+  return US_STATE_PATTERNS.some((p) => loc.includes(p));
+}
+
 export function matchesLocation(
   location: string | undefined,
   locations: string[] | undefined,
@@ -34,7 +50,10 @@ export function matchesLocation(
   if (!locations || locations.length === 0) return true;
   if (!location) return sendIfNoLocation;
   const loc = location.toLowerCase();
-  return locations.some((l) => loc.includes(l.toLowerCase()));
+  return locations.some((l) => {
+    const entry = l.toLowerCase();
+    return US_ALIASES.has(entry) ? matchesUsEntry(loc) : loc.includes(entry);
+  });
 }
 
 export function matchesTitle(jobTitle: string, targets: string[]): boolean {
