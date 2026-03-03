@@ -97,7 +97,7 @@ async function runCheck(): Promise<void> {
   }
 
   try {
-    await sendDigest(newMatches, config.jobTitles, config.email);
+    await sendDigest(newMatches, config.jobTitles, config.email, config.locations);
   } catch (err) {
     console.error("[check] Failed to send email:", err);
     // Don't mark jobs as seen if the email failed

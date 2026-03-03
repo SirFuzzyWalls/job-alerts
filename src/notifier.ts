@@ -31,12 +31,15 @@ function sortedByDate(jobs: Job[]): Job[] {
   });
 }
 
-function buildEmailBody(jobs: Job[], jobTitles: string[]): string {
+function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: string[]): string {
   const now = new Date();
   const lines: string[] = [
     `New job postings matching your alerts (${jobTitles.join(", ")}):`,
-    "",
   ];
+  if (locations && locations.length > 0) {
+    lines.push(`Locations: ${locations.join(", ")}`);
+  }
+  lines.push("");
 
   for (const job of sortedByDate(jobs)) {
     const when = job.postedAt ? ` — ${timeAgo(job.postedAt, now)}` : "";
@@ -59,7 +62,8 @@ function buildSubject(jobs: Job[], jobTitles: string[]): string {
 export async function sendDigest(
   jobs: Job[],
   jobTitles: string[],
-  emailConfig: EmailConfig
+  emailConfig: EmailConfig,
+  locations?: string[]
 ): Promise<void> {
   const transporter = nodemailer.createTransport({
     host: emailConfig.smtp.host,
@@ -72,7 +76,7 @@ export async function sendDigest(
   });
 
   const subject = buildSubject(jobs, jobTitles);
-  const text = buildEmailBody(jobs, jobTitles);
+  const text = buildEmailBody(jobs, jobTitles, locations);
 
   await transporter.sendMail({
     from: emailConfig.from,
