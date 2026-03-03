@@ -2,7 +2,7 @@ import cron from "node-cron";
 import { loadConfig } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
 import { matchesTitle } from "./matcher.js";
-import { loadState, saveState } from "./state.js";
+import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest } from "./notifier.js";
 
 const onceMode = process.argv.includes("--once");
@@ -49,7 +49,8 @@ async function runDryRun(): Promise<void> {
 
 async function runCheck(): Promise<void> {
   const config = loadConfig();
-  const seen = loadState();
+  const { seen: rawSeen, isFirstRun } = loadState();
+  const seen = pruneState(rawSeen, config.stateRetentionDays);
 
   console.log(
     `[check] Fetching jobs for: ${config.jobTitles.join(", ")} …`
@@ -58,10 +59,26 @@ async function runCheck(): Promise<void> {
   const allJobs = await fetchAllJobs(config);
   console.log(`[check] Total jobs fetched: ${allJobs.length}`);
 
-  const newMatches = allJobs.filter(
-    (job) =>
-      matchesTitle(job.title, config.jobTitles) && !seen[job.stateKey]
+  const matches = allJobs.filter((job) =>
+    matchesTitle(job.title, config.jobTitles)
   );
+
+  if (isFirstRun) {
+    const now = Date.now();
+    for (const job of matches) {
+      seen[job.stateKey] = now;
+    }
+    saveState(seen);
+    console.log(
+      `[check] First run — seeded ${matches.length} matching job(s) as seen. No email sent.`
+    );
+    console.log(
+      "[check] Future runs will only email genuinely new postings."
+    );
+    return;
+  }
+
+  const newMatches = matches.filter((job) => !seen[job.stateKey]);
 
   console.log(`[check] New matches: ${newMatches.length}`);
 
@@ -78,8 +95,9 @@ async function runCheck(): Promise<void> {
     return;
   }
 
+  const now = Date.now();
   for (const job of newMatches) {
-    seen[job.stateKey] = true;
+    seen[job.stateKey] = now;
   }
   saveState(seen);
 

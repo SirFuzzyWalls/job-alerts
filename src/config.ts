@@ -34,6 +34,7 @@ export type CompanyConfig =
 export interface Config {
   jobTitles: string[];
   intervalMinutes: number;
+  stateRetentionDays: number;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
   companies?: CompanyConfig[];
@@ -42,6 +43,7 @@ export interface Config {
 interface RawConfig {
   jobTitles: string[];
   intervalMinutes?: number;
+  stateRetentionDays?: number;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
   companies?: "all" | (string | CompanyConfig)[];
@@ -94,6 +96,7 @@ export function loadConfig(): Config {
   return {
     ...rawConfig,
     intervalMinutes: rawConfig.intervalMinutes ?? 30,
+    stateRetentionDays: rawConfig.stateRetentionDays ?? 90,
     companies,
   };
 }
