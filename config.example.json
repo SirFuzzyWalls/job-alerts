@@ -8,6 +8,10 @@
   "maxSalary": 300000,
   "sendIfNoSalary": true,
 
+  "_locationNote": "Optional location allowlist — omit to include all locations:",
+  "locations": ["United States", "Remote", "San Francisco"],
+  "sendIfNoLocation": true,
+
   "email": {
     "smtp": {
       "host": "smtp.gmail.com",

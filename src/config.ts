@@ -38,6 +38,8 @@ export interface Config {
   minSalary?: number;
   maxSalary?: number;
   sendIfNoSalary: boolean;
+  locations?: string[];
+  sendIfNoLocation: boolean;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
   companies?: CompanyConfig[];
@@ -50,6 +52,8 @@ interface RawConfig {
   minSalary?: number;
   maxSalary?: number;
   sendIfNoSalary?: boolean;
+  locations?: string[];
+  sendIfNoLocation?: boolean;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
   companies?: "all" | (string | CompanyConfig)[];
@@ -104,6 +108,7 @@ export function loadConfig(): Config {
     intervalMinutes: rawConfig.intervalMinutes ?? 30,
     stateRetentionDays: rawConfig.stateRetentionDays ?? 90,
     sendIfNoSalary: rawConfig.sendIfNoSalary ?? true,
+    sendIfNoLocation: rawConfig.sendIfNoLocation ?? true,
     companies,
   };
 }

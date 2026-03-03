@@ -32,6 +32,8 @@ Open `config.json` and fill in your settings:
 | `minSalary` | Optional — exclude jobs whose listed salary is entirely below this annual amount |
 | `maxSalary` | Optional — exclude jobs whose listed salary is entirely above this annual amount |
 | `sendIfNoSalary` | Whether to include jobs with no salary data when a salary filter is set (default: true) |
+| `locations` | Optional allowlist — only include jobs whose location contains one of these strings (case-insensitive). Omit to include all locations. |
+| `sendIfNoLocation` | Whether to include jobs with no location data when `locations` is set (default: true) |
 | `email.smtp` | SMTP credentials for outbound email |
 | `email.to` | Address to send digests to |
 | `email.from` | From address shown in the email |

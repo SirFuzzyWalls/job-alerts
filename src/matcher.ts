@@ -26,6 +26,17 @@ export function matchesSalary(
   return true;
 }
 
+export function matchesLocation(
+  location: string | undefined,
+  locations: string[] | undefined,
+  sendIfNoLocation: boolean
+): boolean {
+  if (!locations || locations.length === 0) return true;
+  if (!location) return sendIfNoLocation;
+  const loc = location.toLowerCase();
+  return locations.some((l) => loc.includes(l.toLowerCase()));
+}
+
 export function matchesTitle(jobTitle: string, targets: string[]): boolean {
   const normalizedJob = jobTitle.toLowerCase();
 

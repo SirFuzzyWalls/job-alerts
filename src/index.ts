@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { loadConfig } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
-import { matchesTitle, matchesSalary } from "./matcher.js";
+import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest } from "./notifier.js";
 
@@ -37,7 +37,8 @@ async function runDryRun(): Promise<void> {
   const matched = allJobs.filter(
     (job) =>
       matchesTitle(job.title, config.jobTitles) &&
-      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary)
+      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
+      matchesLocation(job.location, config.locations, config.sendIfNoLocation)
   );
   console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Title matches: ${matched.length}`);
 
@@ -67,7 +68,8 @@ async function runCheck(): Promise<void> {
   const matches = allJobs.filter(
     (job) =>
       matchesTitle(job.title, config.jobTitles) &&
-      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary)
+      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
+      matchesLocation(job.location, config.locations, config.sendIfNoLocation)
   );
 
   if (isFirstRun) {
