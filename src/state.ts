@@ -5,16 +5,27 @@ const STATE_FILE = path.resolve(process.cwd(), "seen_jobs.json");
 
 export type SeenJobs = Record<string, number>;
 
-export function loadState(): { seen: SeenJobs; isFirstRun: boolean } {
+export function loadState(): { seen: SeenJobs; isFirstRun: boolean; lastCheckAt: number | undefined } {
   if (!fs.existsSync(STATE_FILE)) {
-    return { seen: {}, isFirstRun: true };
+    return { seen: {}, isFirstRun: true, lastCheckAt: undefined };
   }
   try {
     const raw = fs.readFileSync(STATE_FILE, "utf-8");
-    return { seen: JSON.parse(raw) as SeenJobs, isFirstRun: false };
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    // New format: { seen: {...}, lastCheckAt: number }
+    // Old format: flat { stateKey: timestamp, ... }
+    if ("seen" in parsed && typeof parsed.seen === "object" && parsed.seen !== null) {
+      return {
+        seen: parsed.seen as SeenJobs,
+        lastCheckAt: typeof parsed.lastCheckAt === "number" ? parsed.lastCheckAt : undefined,
+        isFirstRun: false,
+      };
+    }
+    // Backward compat: old flat format
+    return { seen: parsed as SeenJobs, lastCheckAt: undefined, isFirstRun: false };
   } catch (err) {
     console.warn("[state] Could not load seen_jobs.json, starting fresh:", err);
-    return { seen: {}, isFirstRun: false };
+    return { seen: {}, isFirstRun: false, lastCheckAt: undefined };
   }
 }
 
@@ -31,9 +42,9 @@ export function pruneState(seen: SeenJobs, retentionDays: number): SeenJobs {
   return pruned;
 }
 
-export function saveState(seen: SeenJobs): void {
+export function saveState(seen: SeenJobs, lastCheckAt: number): void {
   try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify(seen, null, 2), "utf-8");
+    fs.writeFileSync(STATE_FILE, JSON.stringify({ seen, lastCheckAt }, null, 2), "utf-8");
   } catch (err) {
     console.error("[state] Failed to save seen_jobs.json:", err);
   }

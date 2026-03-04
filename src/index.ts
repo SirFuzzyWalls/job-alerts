@@ -50,15 +50,16 @@ async function runDryRun(): Promise<void> {
     }
   }
 
+  const { lastCheckAt: dryLastCheckAt } = loadState();
   console.log("\n--- Email preview ---");
-  console.log(buildEmailBody(matched, config.jobTitles, config.locations));
+  console.log(buildEmailBody(matched, config.jobTitles, config.locations, dryLastCheckAt, config.intervalMinutes));
   console.log("--- End of preview ---");
   console.log("\n[dry-run] Done. No email sent, no state changed.");
 }
 
 async function runCheck(): Promise<void> {
   const config = loadConfig();
-  const { seen: rawSeen, isFirstRun } = loadState();
+  const { seen: rawSeen, isFirstRun, lastCheckAt } = loadState();
   const seen = pruneState(rawSeen, config.stateRetentionDays);
 
   console.log(
@@ -80,7 +81,7 @@ async function runCheck(): Promise<void> {
     for (const job of matches) {
       seen[job.stateKey] = now;
     }
-    saveState(seen);
+    saveState(seen, now);
     console.log(
       `[check] First run — seeded ${matches.length} matching job(s) as seen. No email sent.`
     );
@@ -99,19 +100,20 @@ async function runCheck(): Promise<void> {
     return;
   }
 
+  const now = Date.now();
+
   try {
-    await sendDigest(newMatches, config.jobTitles, config.email, config.locations);
+    await sendDigest(newMatches, config.jobTitles, config.email, config.locations, lastCheckAt, config.intervalMinutes);
   } catch (err) {
     console.error("[check] Failed to send email:", err);
     // Don't mark jobs as seen if the email failed
     return;
   }
 
-  const now = Date.now();
   for (const job of newMatches) {
     seen[job.stateKey] = now;
   }
-  saveState(seen);
+  saveState(seen, now);
 
   console.log(
     `[check] Marked ${newMatches.length} job(s) as seen. State saved.`

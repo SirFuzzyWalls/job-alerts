@@ -28,7 +28,22 @@ export function matchesSalary(
 
 const US_ALIASES = new Set(["united states", "united states of america", "usa", "us"]);
 
-// Comma-prefixed so ", CA" matches "San Francisco, CA" but not "Canada" or "Caracas"
+const US_STATE_NAMES = new Set([
+  "alabama", "alaska", "arizona", "arkansas", "california",
+  "colorado", "connecticut", "delaware", "florida", "georgia",
+  "hawaii", "idaho", "illinois", "indiana", "iowa",
+  "kansas", "kentucky", "louisiana", "maine", "maryland",
+  "massachusetts", "michigan", "minnesota", "mississippi", "missouri",
+  "montana", "nebraska", "nevada", "new hampshire", "new jersey",
+  "new mexico", "new york", "north carolina", "north dakota", "ohio",
+  "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina",
+  "south dakota", "tennessee", "texas", "utah", "vermont",
+  "virginia", "washington", "west virginia", "wisconsin", "wyoming",
+  "district of columbia",
+]);
+
+// Comma-prefixed so ", CA" matches "San Francisco, CA" but not "Canada" or "Caracas".
+// Word-boundary check prevents ", in" from matching ", india" etc.
 const US_STATE_PATTERNS = [
   "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga",
   "hi", "id", "il", "in", "ia", "ks", "ky", "la", "me", "md",
@@ -38,8 +53,18 @@ const US_STATE_PATTERNS = [
 ].map((s) => `, ${s}`);
 
 function matchesUsEntry(loc: string): boolean {
-  if (US_ALIASES.has(loc)) return true; // e.g. "Remote, United States"
-  return US_STATE_PATTERNS.some((p) => loc.includes(p));
+  if (US_ALIASES.has(loc)) return true;
+  // Full state name anywhere in the location string (e.g. "San Francisco, California")
+  for (const name of US_STATE_NAMES) {
+    if (loc.includes(name)) return true;
+  }
+  // Two-letter abbreviation with word-boundary guard (e.g. "Austin, TX" but not "Toronto, Canada")
+  return US_STATE_PATTERNS.some((p) => {
+    const idx = loc.indexOf(p);
+    if (idx === -1) return false;
+    const next = loc[idx + p.length];
+    return next === undefined || !/[a-z]/.test(next);
+  });
 }
 
 export function matchesLocation(

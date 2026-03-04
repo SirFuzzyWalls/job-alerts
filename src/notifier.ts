@@ -2,9 +2,21 @@ import nodemailer from "nodemailer";
 import type { EmailConfig } from "./config.js";
 import type { Job } from "./sources/types.js";
 
-function timeAgo(postedAt: string, now: Date): string {
+function formatCheckDelta(lastCheckAt: number | undefined, intervalMinutes: number | undefined, now: Date): string {
+  const ms = lastCheckAt !== undefined
+    ? now.getTime() - lastCheckAt
+    : (intervalMinutes ?? 30) * 60_000;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `~${minutes} min`;
+  const hours = Math.round(ms / 3_600_000);
+  return `~${hours} hr`;
+}
+
+function timeAgo(postedAt: string, now: Date, lastCheckAt?: number, intervalMinutes?: number): string {
   const d = new Date(postedAt);
-  if (isNaN(d.getTime())) return postedAt; // Workday raw string e.g. "Posted 2 Days Ago"
+  if (isNaN(d.getTime())) {
+    return `est. posted within last ${formatCheckDelta(lastCheckAt, intervalMinutes, now)}`;
+  }
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / 86_400_000);
   if (diffDays <= 0) {
@@ -31,7 +43,7 @@ function sortedByDate(jobs: Job[]): Job[] {
   });
 }
 
-export function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: string[]): string {
+export function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: string[], lastCheckAt?: number, intervalMinutes?: number): string {
   const now = new Date();
   const lines: string[] = [
     `New job postings matching your alerts (${jobTitles.join(", ")}):`,
@@ -42,7 +54,7 @@ export function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: str
   lines.push("");
 
   for (const job of sortedByDate(jobs)) {
-    const when = job.postedAt ? ` — ${timeAgo(job.postedAt, now)}` : "";
+    const when = job.postedAt ? ` — ${timeAgo(job.postedAt, now, lastCheckAt, intervalMinutes)}` : "";
     lines.push(`• ${job.title} @ ${job.company} (${job.source})${when}`);
     if (job.salary) lines.push(`  ${job.salary}`);
     if (job.location) lines.push(`  ${job.location}`);
@@ -63,7 +75,9 @@ export async function sendDigest(
   jobs: Job[],
   jobTitles: string[],
   emailConfig: EmailConfig,
-  locations?: string[]
+  locations?: string[],
+  lastCheckAt?: number,
+  intervalMinutes?: number,
 ): Promise<void> {
   const transporter = nodemailer.createTransport({
     host: emailConfig.smtp.host,
@@ -76,7 +90,7 @@ export async function sendDigest(
   });
 
   const subject = buildSubject(jobs, jobTitles);
-  const text = buildEmailBody(jobs, jobTitles, locations);
+  const text = buildEmailBody(jobs, jobTitles, locations, lastCheckAt, intervalMinutes);
 
   await transporter.sendMail({
     from: emailConfig.from,
