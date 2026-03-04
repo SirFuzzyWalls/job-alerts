@@ -153,6 +153,8 @@ You can mix IDs and inline objects freely. If you figure out the parameters for 
 | `npm start` | Run on a recurring schedule (uses `intervalMinutes`) |
 | `npm run check` | Fetch once, send digest if matches found, then exit |
 | `npm run dry-run` | Fetch jobs and print matches — **no email sent, no state saved** |
+| `npm run probe -- <url>` | Auto-detect ATS from a careers page URL, test the API, and interactively add to `boards.json` |
+| `npm run validate-boards` | Probe every entry in `boards.json` and report pass/fail — exits 1 if any board returns 0 jobs |
 
 ### Dry-run
 
@@ -182,9 +184,43 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 `boards.json` is a community-maintained list of ~65 verified company boards spanning Greenhouse, Ashby, Lever, and Workday. Using a registry ID is easier than looking up ATS-specific parameters yourself (especially Workday's `careerSite` and `subdomain` values).
 
-### Adding a company via PR
+### Adding a company with `probe` (recommended)
 
-Find the company's ATS, then add a single JSON object to `boards.json`:
+`npm run probe` detects the ATS from a public job board URL, tests the API live, and writes the entry to `boards.json` interactively:
+
+```
+$ npm run probe -- https://boards.greenhouse.io/stripe
+
+Detected: source=greenhouse  slug=stripe
+
+Probing board...
+Found 97 jobs. Sample titles:
+  - Software Engineer, Payments
+  - Senior Data Scientist
+  - Product Manager, Risk
+
+Company name? [Stripe]:
+New entry: {"id":"stripe","name":"Stripe","source":"greenhouse","slug":"stripe"}
+Add to boards.json? [y/N] y
+
+Success! "Stripe" (stripe) added to boards.json.
+```
+
+Supported URL formats:
+
+| ATS | Example URL |
+|---|---|
+| Greenhouse | `https://boards.greenhouse.io/{slug}` |
+| Greenhouse | `https://job-boards.greenhouse.io/{slug}` |
+| Lever | `https://jobs.lever.co/{slug}` |
+| Ashby | `https://jobs.ashbyhq.com/{slug}` |
+| Workday | `https://{company}.{subdomain}.myworkdayjobs.com/{locale}/{careerSite}` |
+
+`probe` also detects duplicates and warns if the board returns 0 jobs (private or empty board), letting you decide whether to add it anyway.
+
+### Adding a company via PR (manual)
+
+If you prefer to add an entry by hand, find the company's ATS and append a single JSON object to `boards.json`:
 
 **Greenhouse / Lever / Ashby:**
 ```json
@@ -196,9 +232,24 @@ Find the company's ATS, then add a single JSON object to `boards.json`:
 { "id": "acme", "name": "Acme Corp", "source": "workday", "company": "acme", "careerSite": "External_Careers", "subdomain": "wd5" }
 ```
 
-To find Workday params: go to the company's careers page and look at the URL — it typically follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/<careerSite>/`.
+To find Workday params: go to the company's careers page and look at the URL — it follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/<locale>/<careerSite>`.
 
 No TypeScript knowledge needed — a PR is just a one-line JSON diff.
+
+### Validating the registry
+
+`npm run validate-boards` probes every board in `boards.json` (5 concurrent requests) and prints a pass/fail summary:
+
+```
+Validating 82 boards...
+  [PASS] Airbnb (134 jobs)
+  [PASS] Stripe (97 jobs)
+  [FAIL] SomeCo: 0 jobs returned (invalid slug, private board, or empty)
+  ...
+Summary: 81/82 boards healthy
+```
+
+Exits with code 1 if any board fails, making it usable as a pre/post regression check when adding new entries.
 
 ---
 
