@@ -25,7 +25,13 @@ function toId(name: string): string {
 
 type ParsedURL = CompanyConfig;
 
-function parseURL(url: string): ParsedURL | null {
+/** Extract careerSite path segment from a myworkdayjobs.com URL string. */
+function workdayCareerSiteFromPath(url: string): string | null {
+  const m = url.match(/myworkdayjobs\.com\/(?:[^/]+\/)?([^/?#]+)/);
+  return m?.[1] ?? null;
+}
+
+async function parseURL(url: string): Promise<ParsedURL | null> {
   // Greenhouse
   const gh = url.match(/^https?:\/\/(?:boards|job-boards)\.greenhouse\.io\/([^/?#]+)/);
   if (gh) return { source: "greenhouse", slug: gh[1] };
@@ -38,9 +44,28 @@ function parseURL(url: string): ParsedURL | null {
   const ab = url.match(/^https?:\/\/jobs\.ashbyhq\.com\/([^/?#]+)/);
   if (ab) return { source: "ashby", slug: ab[1] };
 
-  // Workday: https://{company}.{subdomain}.myworkdayjobs.com/{locale}/{careerSite}
-  const wd = url.match(/^https?:\/\/([^.]+)\.([^.]+)\.myworkdayjobs\.com\/[^/]+\/([^/?#]+)/);
-  if (wd) return { source: "workday", company: wd[1], subdomain: wd[2], careerSite: wd[3] };
+  // Workday (myworkdayjobs.com): https://{company}.{subdomain}.myworkdayjobs.com/[{locale}/]{careerSite}
+  const wdBase = url.match(/^https?:\/\/([^.]+)\.([^.]+)\.myworkdayjobs\.com/);
+  if (wdBase) {
+    const company = wdBase[1];
+    const subdomain = wdBase[2];
+    let careerSite = workdayCareerSiteFromPath(url);
+    if (!careerSite) {
+      // No careerSite in URL — follow redirect to discover it
+      process.stdout.write("No careerSite in URL, following redirect to discover it...");
+      try {
+        const res = await fetch(url);
+        careerSite = workdayCareerSiteFromPath(res.url);
+      } catch { /* fall through */ }
+      process.stdout.write(careerSite ? ` found: ${careerSite}\n` : " failed\n");
+    }
+    if (!careerSite) return null;
+    return { source: "workday", company, subdomain, careerSite };
+  }
+
+  // Workday (myworkdaysite.com): https://{subdomain}.myworkdaysite.com/recruiting/{company}/{careerSite}
+  const wds = url.match(/^https?:\/\/([^.]+)\.myworkdaysite\.com\/recruiting\/([^/]+)\/([^/?#]+)/);
+  if (wds) return { source: "workday", subdomain: wds[1], company: wds[2], careerSite: wds[3], baseUrl: `https://${wds[1]}.myworkdaysite.com` };
 
   return null;
 }
@@ -77,15 +102,23 @@ async function main() {
   }
 
   // 1. Parse URL
-  const parsed = parseURL(url);
+  const isWorkdayDomain = /myworkdayjobs\.com/i.test(url);
+  const parsed = await parseURL(url);
   if (!parsed) {
-    console.error(`Unrecognized URL format: ${url}\n`);
-    console.error("Supported formats:");
-    console.error("  Greenhouse: https://boards.greenhouse.io/{slug}");
-    console.error("              https://job-boards.greenhouse.io/{slug}");
-    console.error("  Lever:      https://jobs.lever.co/{slug}");
-    console.error("  Ashby:      https://jobs.ashbyhq.com/{slug}");
-    console.error("  Workday:    https://{company}.{subdomain}.myworkdayjobs.com/{locale}/{careerSite}");
+    if (isWorkdayDomain) {
+      console.error(`Could not determine Workday careerSite from URL: ${url}`);
+      console.error("Try navigating to the careers page and copying the full URL once jobs are loaded,");
+      console.error("e.g. https://ghr.wd1.myworkdayjobs.com/en-US/GHR");
+    } else {
+      console.error(`Unrecognized URL format: ${url}\n`);
+      console.error("Supported formats:");
+      console.error("  Greenhouse: https://boards.greenhouse.io/{slug}");
+      console.error("              https://job-boards.greenhouse.io/{slug}");
+      console.error("  Lever:      https://jobs.lever.co/{slug}");
+      console.error("  Ashby:      https://jobs.ashbyhq.com/{slug}");
+      console.error("  Workday:    https://{company}.{subdomain}.myworkdayjobs.com/[{locale}/]{careerSite}");
+      console.error("              https://{subdomain}.myworkdaysite.com/recruiting/{company}/{careerSite}");
+    }
     process.exit(1);
   }
 

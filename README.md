@@ -184,6 +184,8 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 `boards.json` is a community-maintained list of ~65 verified company boards spanning Greenhouse, Ashby, Lever, and Workday. Using a registry ID is easier than looking up ATS-specific parameters yourself (especially Workday's `careerSite` and `subdomain` values).
 
+**Note:** A few large companies (Google, Amazon, Apple, Meta) run fully proprietary career platforms that don't expose a public JSON API. They cannot be monitored by this tool. If any of them ever adopts Greenhouse, Lever, Ashby, or Workday with a public board, they can be added to `boards.json` with no code changes.
+
 ### Adding a company with `probe` (recommended)
 
 `npm run probe` detects the ATS from a public job board URL, tests the API live, and writes the entry to `boards.json` interactively:
@@ -214,7 +216,8 @@ Supported URL formats:
 | Greenhouse | `https://job-boards.greenhouse.io/{slug}` |
 | Lever | `https://jobs.lever.co/{slug}` |
 | Ashby | `https://jobs.ashbyhq.com/{slug}` |
-| Workday | `https://{company}.{subdomain}.myworkdayjobs.com/{locale}/{careerSite}` |
+| Workday | `https://{company}.{subdomain}.myworkdayjobs.com/[{locale}/]{careerSite}` |
+| Workday | `https://{subdomain}.myworkdaysite.com/recruiting/{company}/{careerSite}` |
 
 `probe` also detects duplicates and warns if the board returns 0 jobs (private or empty board), letting you decide whether to add it anyway.
 
@@ -232,7 +235,7 @@ If you prefer to add an entry by hand, find the company's ATS and append a singl
 { "id": "acme", "name": "Acme Corp", "source": "workday", "company": "acme", "careerSite": "External_Careers", "subdomain": "wd5" }
 ```
 
-To find Workday params: go to the company's careers page and look at the URL — it follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/<locale>/<careerSite>`.
+To find Workday params: go to the company's careers page and look at the URL — it follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/[<locale>/]<careerSite>`. Some companies omit the locale segment.
 
 No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 

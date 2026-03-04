@@ -29,6 +29,7 @@ export type CompanyConfig =
       company: string;
       careerSite: string;
       subdomain: string;
+      baseUrl?: string;  // overrides constructed URL for myworkdaysite.com etc.
     };
 
 export interface Config {

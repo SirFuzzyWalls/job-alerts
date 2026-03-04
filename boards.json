@@ -10,7 +10,6 @@
   { "id": "lowes", "name": "Lowe's", "source": "workday", "company": "lowes", "careerSite": "LWS_External_CS", "subdomain": "wd5" },
   { "id": "dollar-tree", "name": "Dollar Tree", "source": "workday", "company": "dollartree", "careerSite": "dollartreeus", "subdomain": "wd5" },
 
-  { "id": "fedex", "name": "FedEx", "source": "workday", "company": "fedex", "careerSite": "FXF_External_Career_Site", "subdomain": "wd1" },
   { "id": "att", "name": "AT&T", "source": "workday", "company": "att", "careerSite": "ATTGeneral", "subdomain": "wd1" },
   { "id": "verizon", "name": "Verizon", "source": "workday", "company": "verizon", "careerSite": "verizon-careers", "subdomain": "wd12" },
   { "id": "comcast", "name": "Comcast", "source": "workday", "company": "comcast", "careerSite": "Comcast_Careers", "subdomain": "wd5" },
@@ -79,5 +78,15 @@
   { "id": "notion", "name": "Notion", "source": "ashby", "slug": "notion" },
   { "id": "perplexity", "name": "Perplexity AI", "source": "ashby", "slug": "perplexity" },
   { "id": "wealthsimple", "name": "Wealthsimple", "source": "ashby", "slug": "wealthsimple" },
-  { "id": "elevenlabs", "name": "ElevenLabs", "source": "ashby", "slug": "elevenlabs" }
+  { "id": "elevenlabs", "name": "ElevenLabs", "source": "ashby", "slug": "elevenlabs" },
+  {"id":"nvidia","name":"Nvidia","source":"workday","company":"nvidia","subdomain":"wd5","careerSite":"NVIDIAExternalCareerSite"},
+  {"id":"crowdstrike","name":"Crowdstrike","source":"workday","company":"crowdstrike","subdomain":"wd5","careerSite":"crowdstrikecareers"},
+  {"id":"netflix","name":"Netflix","source":"workday","company":"netflix","subdomain":"wd1","careerSite":"Netflix"},
+  {"id":"bmo","name":"Bmo","source":"workday","company":"bmo","subdomain":"wd3","careerSite":"external"},
+  {"id":"ms","name":"Ms","source":"workday","company":"ms","subdomain":"wd5","careerSite":"External"},
+  {"id":"td","name":"Td","source":"workday","company":"td","subdomain":"wd3","careerSite":"TD_Bank_Careers"},
+  {"id":"pnc","name":"Pnc","source":"workday","company":"pnc","subdomain":"wd5","careerSite":"External"},
+  {"id":"capitalone","name":"Capitalone","source":"workday","company":"capitalone","subdomain":"wd12","careerSite":"Capital_One"},
+  {"id":"usbank","name":"Usbank","source":"workday","company":"usbank","subdomain":"wd1","careerSite":"US_Bank_Careers"},
+  {"id":"bankofamerica","name":"BankOfAmerica","source":"workday","company":"ghr","subdomain":"wd1","careerSite":"Lateral-US"}
 ]

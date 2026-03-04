@@ -4,6 +4,7 @@ interface WorkdayCompanyConfig {
   company: string;
   careerSite: string;
   subdomain: string;
+  baseUrl?: string;
 }
 
 interface WorkdayJobPosting {
@@ -15,8 +16,8 @@ interface WorkdayJobPosting {
 }
 
 export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
-  const { company, careerSite, subdomain } = cfg;
-  const baseUrl = `https://${company}.${subdomain}.myworkdayjobs.com`;
+  const { company, careerSite, subdomain, baseUrl: cfgBaseUrl } = cfg;
+  const baseUrl = cfgBaseUrl ?? `https://${company}.${subdomain}.myworkdayjobs.com`;
   const apiPath = `/wday/cxs/${company}/${careerSite}/jobs`;
   const url = baseUrl + apiPath;
 

@@ -17,7 +17,7 @@ export async function probeBoard(entry: BoardEntry): Promise<ProbeResult> {
     case "greenhouse": jobs = await fetchGreenhouse(entry.slug); break;
     case "lever":      jobs = await fetchLever(entry.slug); break;
     case "ashby":      jobs = await fetchAshby(entry.slug); break;
-    case "workday":    jobs = await fetchWorkday({ company: entry.company, careerSite: entry.careerSite, subdomain: entry.subdomain }); break;
+    case "workday":    jobs = await fetchWorkday({ company: entry.company, careerSite: entry.careerSite, subdomain: entry.subdomain, baseUrl: entry.baseUrl }); break;
     default: return { ok: false, count: 0, error: `Unknown source: ${(entry as {source:string}).source}`, samples: [] };
   }
   if (jobs.length === 0)
