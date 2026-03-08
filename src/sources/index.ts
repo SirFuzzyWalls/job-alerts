@@ -5,6 +5,7 @@ import { fetchGreenhouse } from "./greenhouse.js";
 import { fetchLever } from "./lever.js";
 import { fetchAshby } from "./ashby.js";
 import { fetchWorkday } from "./workday.js";
+import { fetchHackerNews } from "./hackernews.js";
 
 export type { Job };
 
@@ -14,6 +15,11 @@ export async function fetchAllJobs(config: Config): Promise<Job[]> {
   // USAJobs (if configured)
   if (config.usajobs?.apiKey) {
     tasks.push(fetchUSAJobs(config.jobTitles, config.usajobs));
+  }
+
+  // Hacker News (if configured)
+  if (config.hackernews) {
+    tasks.push(fetchHackerNews());
   }
 
   // Per-company sources

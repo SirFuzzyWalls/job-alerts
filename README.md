@@ -2,7 +2,7 @@
 
 A self-hosted job alert tool that polls company ATS boards and emails you a digest of new postings matching your title filters. Runs on a schedule or on demand.
 
-**Supported sources:** Greenhouse, Lever, Ashby, Workday, USAJobs
+**Supported sources:** Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News
 
 ---
 
@@ -38,6 +38,7 @@ Open `config.json` and fill in your settings:
 | `email.to` | Address to send digests to |
 | `email.from` | From address shown in the email |
 | `usajobs.apiKey` | Optional — USAJobs API key for federal postings |
+| `hackernews` | Optional — set to `true` to include recent YC/startup job posts from Hacker News (no API key needed) |
 | `companies` | Which companies to monitor — see below |
 | `excludeCompanies` | IDs to skip when using `"all"` — see below |
 
@@ -180,11 +181,22 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 ---
 
+## Hacker News jobs
+
+Set `"hackernews": true` in `config.json` to pull job posts from the [Hacker News job board](https://news.ycombinator.com/jobs). These are posted directly on HN, primarily by Y Combinator-backed startups. The public [Firebase API](https://github.com/HackerNews/API) returns up to 200 of the most recent postings — no account or API key required.
+
+A few caveats:
+- **Title/location parsing is best-effort.** HN post titles are free-form (e.g. `"Acme (YC W24) is hiring a Senior Engineer (Remote)"`), so company and role are extracted by pattern matching. The full title is always used as a fallback, so `jobTitles` filtering still works reliably.
+- **Salary is not available.** HN job posts don't expose structured salary data. Set `sendIfNoSalary: true` (the default) to include them.
+- **Location is often "Remote" or absent.** If you filter by `locations`, set `sendIfNoLocation: true` to avoid missing jobs that don't mention a location.
+
+---
+
 ## Community registry (`boards.json`)
 
 `boards.json` is a community-maintained list of ~65 verified company boards spanning Greenhouse, Ashby, Lever, and Workday. Using a registry ID is easier than looking up ATS-specific parameters yourself (especially Workday's `careerSite` and `subdomain` values).
 
-**Note:** A few large companies (Google, Amazon, Apple, Meta) run fully proprietary career platforms that don't expose a public JSON API. They cannot be monitored by this tool. If any of them ever adopts Greenhouse, Lever, Ashby, or Workday with a public board, they can be added to `boards.json` with no code changes.
+**Note:** Some career platforms don't expose a public JSON API and cannot be monitored by this tool. This includes large tech companies (Google, Amazon, Apple, Meta) and government portals like **CalCareers** (calcareers.ca.gov), which uses ASP.NET server-side callbacks. If any of them ever adopts Greenhouse, Lever, Ashby, or Workday with a public board, they can be added to `boards.json` with no code changes. For US federal jobs, use the `usajobs` integration instead.
 
 ### Adding a company with `probe` (recommended)
 

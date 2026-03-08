@@ -43,6 +43,7 @@ export interface Config {
   sendIfNoLocation: boolean;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
+  hackernews?: boolean;
   companies?: CompanyConfig[];
 }
 
@@ -57,6 +58,7 @@ interface RawConfig {
   sendIfNoLocation?: boolean;
   email: EmailConfig;
   usajobs?: USAJobsConfig;
+  hackernews?: boolean;
   companies?: "all" | (string | CompanyConfig)[];
   excludeCompanies?: string[];
 }
