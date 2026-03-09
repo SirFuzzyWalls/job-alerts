@@ -540,8 +540,10 @@ async function initMap() {
   await loadLeaflet();
 
   const map = L.map("map").setView([39.5, -98.35], 4);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20
   }).addTo(map);
 
   let cluster = L.markerClusterGroup();
@@ -566,11 +568,15 @@ async function initMap() {
     }
 
     for (const job of data.jobs) {
+      const timeStr = relativePostedAt(job.postedAt)
+        ? "Posted " + relativePostedAt(job.postedAt)
+        : job.sentAt ? "Seen " + relativeTime(job.sentAt) : null;
       const parts = [
         \`<strong>\${esc(job.title)}</strong>\`,
         esc(job.company),
         job.salary ? esc(job.salary) : null,
         job.location ? esc(job.location) : null,
+        timeStr ? esc(timeStr) : null,
         \`<a href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>\`
       ].filter(Boolean);
       L.marker([job.lat, job.lng]).bindPopup(parts.join("<br>")).addTo(cluster);
