@@ -27,6 +27,7 @@ Open `config.json` and fill in your settings:
 | Field | Description |
 |---|---|
 | `jobTitles` | List of title strings to match against (case-insensitive substring) |
+| `excludeTitleWords` | Optional — reject jobs whose title contains any of these words/phrases (case-insensitive). Useful for filtering out seniority levels like `"Principal"`, `"Staff"`, or `"Lead"` when searching for individual-contributor roles. |
 | `intervalMinutes` | How often to poll in scheduled mode (default: 30) |
 | `stateRetentionDays` | How many days to remember seen jobs before pruning them (default: 90) |
 | `minSalary` | Optional — exclude jobs whose listed salary is entirely below this annual amount |

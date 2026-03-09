@@ -15,7 +15,7 @@ const dashboardMode = process.argv.includes("--dashboard");
 function applyFilters(jobs: Job[], config: Config): Job[] {
   return jobs.filter(
     (job) =>
-      matchesTitle(job.title, config.jobTitles) &&
+      matchesTitle(job.title, config.jobTitles, config.excludeTitleWords) &&
       matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
       matchesLocation(job.location, config.locations, config.sendIfNoLocation)
   );

@@ -81,8 +81,14 @@ export function matchesLocation(
  *   "Engineer"                   → true  (keyword contains title)
  *   "Product Manager"            → false
  */
-export function matchesTitle(jobTitle: string, targets: string[]): boolean {
+export function matchesTitle(jobTitle: string, targets: string[], excludeWords?: string[]): boolean {
   const normalizedJob = jobTitle.toLowerCase();
+
+  if (excludeWords?.length) {
+    for (const word of excludeWords) {
+      if (normalizedJob.includes(word.toLowerCase())) return false;
+    }
+  }
 
   for (const target of targets) {
     const normalizedTarget = target.toLowerCase();
