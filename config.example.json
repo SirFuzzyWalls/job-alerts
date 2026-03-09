@@ -27,6 +27,9 @@
     "userAgent": "you@gmail.com"
   },
 
+  "_hackernewsNote": "Set to true to include recent YC/startup job posts from Hacker News (no API key needed):",
+  "hackernews": true,
+
   "companies": "all",
   "excludeCompanies": ["twitch", "nubank"],
 

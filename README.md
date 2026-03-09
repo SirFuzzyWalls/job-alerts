@@ -2,7 +2,7 @@
 
 A self-hosted job alert tool that polls company ATS boards and emails you a digest of new postings matching your title filters. Runs on a schedule or on demand.
 
-**Supported sources:** Greenhouse, Lever, Ashby, Workday, USAJobs
+**Supported sources:** Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News
 
 ---
 
@@ -38,6 +38,7 @@ Open `config.json` and fill in your settings:
 | `email.to` | Address to send digests to |
 | `email.from` | From address shown in the email |
 | `usajobs.apiKey` | Optional — USAJobs API key for federal postings |
+| `hackernews` | Optional — set to `true` to include recent YC/startup job posts from Hacker News (no API key needed) |
 | `companies` | Which companies to monitor — see below |
 | `excludeCompanies` | IDs to skip when using `"all"` — see below |
 
@@ -153,6 +154,42 @@ You can mix IDs and inline objects freely. If you figure out the parameters for 
 | `npm start` | Run on a recurring schedule (uses `intervalMinutes`) |
 | `npm run check` | Fetch once, send digest if matches found, then exit |
 | `npm run dry-run` | Fetch jobs and print matches — **no email sent, no state saved** |
+| `npm run dashboard` | Start the local web dashboard at `http://localhost:3737` |
+| `npm run probe -- <url>` | Auto-detect ATS from a careers page URL, test the API, and interactively add to `boards.json` |
+| `npm run validate-boards` | Probe every entry in `boards.json` and report pass/fail — exits 1 if any board returns 0 jobs |
+
+### Dashboard
+
+`npm run dashboard` starts a lightweight local web server (no extra dependencies) that lets you browse all previously sent job alerts without digging through your inbox.
+
+```
+npm run dashboard
+# [dashboard] Listening on http://localhost:3737
+```
+
+Open `http://localhost:3737` in your browser. The dashboard reads `job_history.json`, which is written automatically after each successful email digest.
+
+**Features:**
+- Paginated card grid — 10 / 30 / 50 jobs per page
+- Dark/light mode toggle (defaults to system preference, persisted across reloads)
+- Each card shows title, company, source badge, location, salary, how long ago it was posted, and a direct link to the listing
+- **New-job notifications** — while the dashboard is open, it polls the server every 30 seconds. If new jobs have been alerted since you loaded the page, a banner appears at the top:
+  > *"3 new jobs available since you last loaded."*
+
+  Click **Refresh now** to reload the grid, or **Dismiss** to hide the banner (it won't reappear for the same batch).
+- **Map tab** — plots alerted jobs geographically on an OpenStreetMap. Nearby jobs cluster into numbered circles that expand on click; individual markers show a popup with title, company, salary, and a link. Two location helpers are available in the toolbar:
+  - **Use my location** — browser prompts for permission, then pans the map to your coordinates
+  - **Search box** — type any city or address and press Enter / Go to pan there
+
+  Geocoding uses [Nominatim](https://nominatim.openstreetmap.org/) (free, no API key). Results are cached in `geocode_cache.json` so each unique location is only looked up once. Remote and no-location jobs are skipped and counted in the toolbar note. Map assets (Leaflet) are loaded from CDN only when the Map tab is first opened.
+
+Set a custom port with the `PORT` environment variable:
+
+```bash
+PORT=8080 npm run dashboard
+```
+
+> `job_history.json` is created automatically and is excluded from version control. It is **not** populated by `npm run dry-run` — only real check runs that successfully send an email write to it.
 
 ### Dry-run
 
@@ -178,13 +215,61 @@ Use `npm run dry-run` to validate your config and boards before a real run:
 
 ---
 
+## Hacker News jobs
+
+Set `"hackernews": true` in `config.json` to pull job posts from the [Hacker News job board](https://news.ycombinator.com/jobs). These are posted directly on HN, primarily by Y Combinator-backed startups. The public [Firebase API](https://github.com/HackerNews/API) returns up to 200 of the most recent postings — no account or API key required.
+
+A few caveats:
+- **Title/location parsing is best-effort.** HN post titles are free-form (e.g. `"Acme (YC W24) is hiring a Senior Engineer (Remote)"`), so company and role are extracted by pattern matching. The full title is always used as a fallback, so `jobTitles` filtering still works reliably.
+- **Salary is not available.** HN job posts don't expose structured salary data. Set `sendIfNoSalary: true` (the default) to include them.
+- **Location is often "Remote" or absent.** If you filter by `locations`, set `sendIfNoLocation: true` to avoid missing jobs that don't mention a location.
+
+---
+
 ## Community registry (`boards.json`)
 
 `boards.json` is a community-maintained list of ~65 verified company boards spanning Greenhouse, Ashby, Lever, and Workday. Using a registry ID is easier than looking up ATS-specific parameters yourself (especially Workday's `careerSite` and `subdomain` values).
 
-### Adding a company via PR
+**Note:** Some career platforms don't expose a public JSON API and cannot be monitored by this tool. This includes large tech companies (Google, Amazon, Apple, Meta) and government portals like **CalCareers** (calcareers.ca.gov), which uses ASP.NET server-side callbacks. If any of them ever adopts Greenhouse, Lever, Ashby, or Workday with a public board, they can be added to `boards.json` with no code changes. For US federal jobs, use the `usajobs` integration instead.
 
-Find the company's ATS, then add a single JSON object to `boards.json`:
+### Adding a company with `probe` (recommended)
+
+`npm run probe` detects the ATS from a public job board URL, tests the API live, and writes the entry to `boards.json` interactively:
+
+```
+$ npm run probe -- https://boards.greenhouse.io/stripe
+
+Detected: source=greenhouse  slug=stripe
+
+Probing board...
+Found 97 jobs. Sample titles:
+  - Software Engineer, Payments
+  - Senior Data Scientist
+  - Product Manager, Risk
+
+Company name? [Stripe]:
+New entry: {"id":"stripe","name":"Stripe","source":"greenhouse","slug":"stripe"}
+Add to boards.json? [y/N] y
+
+Success! "Stripe" (stripe) added to boards.json.
+```
+
+Supported URL formats:
+
+| ATS | Example URL |
+|---|---|
+| Greenhouse | `https://boards.greenhouse.io/{slug}` |
+| Greenhouse | `https://job-boards.greenhouse.io/{slug}` |
+| Lever | `https://jobs.lever.co/{slug}` |
+| Ashby | `https://jobs.ashbyhq.com/{slug}` |
+| Workday | `https://{company}.{subdomain}.myworkdayjobs.com/[{locale}/]{careerSite}` |
+| Workday | `https://{subdomain}.myworkdaysite.com/recruiting/{company}/{careerSite}` |
+
+`probe` also detects duplicates and warns if the board returns 0 jobs (private or empty board), letting you decide whether to add it anyway.
+
+### Adding a company via PR (manual)
+
+If you prefer to add an entry by hand, find the company's ATS and append a single JSON object to `boards.json`:
 
 **Greenhouse / Lever / Ashby:**
 ```json
@@ -196,9 +281,24 @@ Find the company's ATS, then add a single JSON object to `boards.json`:
 { "id": "acme", "name": "Acme Corp", "source": "workday", "company": "acme", "careerSite": "External_Careers", "subdomain": "wd5" }
 ```
 
-To find Workday params: go to the company's careers page and look at the URL — it typically follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/<careerSite>/`.
+To find Workday params: go to the company's careers page and look at the URL — it follows the pattern `https://<company>.<subdomain>.myworkdayjobs.com/[<locale>/]<careerSite>`. Some companies omit the locale segment.
 
 No TypeScript knowledge needed — a PR is just a one-line JSON diff.
+
+### Validating the registry
+
+`npm run validate-boards` probes every board in `boards.json` (5 concurrent requests) and prints a pass/fail summary:
+
+```
+Validating 82 boards...
+  [PASS] Airbnb (134 jobs)
+  [PASS] Stripe (97 jobs)
+  [FAIL] SomeCo: 0 jobs returned (invalid slug, private board, or empty)
+  ...
+Summary: 81/82 boards healthy
+```
+
+Exits with code 1 if any board fails, making it usable as a pre/post regression check when adding new entries.
 
 ---
 
@@ -209,3 +309,4 @@ No TypeScript knowledge needed — a PR is just a one-line JSON diff.
 3. **First run:** all matches are silently marked as seen — no email is sent. This prevents a blast of hundreds of jobs on a fresh install. From the second run onward, only genuinely new postings trigger an email.
 4. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted (minute-level precision for same-day postings) and salary when available.
 5. Previously seen jobs are tracked in `seen_jobs.json` (created automatically, do not commit). Entries older than `stateRetentionDays` (default 90) are pruned on each run to keep the file bounded. If an email send fails, state is not updated so jobs are retried next run.
+6. After a successful email send, full job objects (title, company, salary, URL, etc.) are appended to `job_history.json` with the time the alert was sent. The local dashboard reads this file. Neither file should be committed — both are in `.gitignore`.

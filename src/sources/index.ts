@@ -5,35 +5,45 @@ import { fetchGreenhouse } from "./greenhouse.js";
 import { fetchLever } from "./lever.js";
 import { fetchAshby } from "./ashby.js";
 import { fetchWorkday } from "./workday.js";
+import { fetchHackerNews } from "./hackernews.js";
+import { allSettledConcurrent } from "../utils.js";
 
 export type { Job };
 
+const FETCH_CONCURRENCY = 10;
+
 export async function fetchAllJobs(config: Config): Promise<Job[]> {
-  const tasks: Promise<Job[]>[] = [];
+  const tasks: (() => Promise<Job[]>)[] = [];
 
   // USAJobs (if configured)
   if (config.usajobs?.apiKey) {
-    tasks.push(fetchUSAJobs(config.jobTitles, config.usajobs));
+    tasks.push(() => fetchUSAJobs(config.jobTitles, config.usajobs!));
+  }
+
+  // Hacker News (if configured)
+  if (config.hackernews) {
+    tasks.push(() => fetchHackerNews());
   }
 
   // Per-company sources
   for (const company of config.companies ?? []) {
     switch (company.source) {
       case "greenhouse":
-        tasks.push(fetchGreenhouse(company.slug));
+        tasks.push(() => fetchGreenhouse(company.slug));
         break;
       case "lever":
-        tasks.push(fetchLever(company.slug));
+        tasks.push(() => fetchLever(company.slug));
         break;
       case "ashby":
-        tasks.push(fetchAshby(company.slug));
+        tasks.push(() => fetchAshby(company.slug));
         break;
       case "workday":
-        tasks.push(
+        tasks.push(() =>
           fetchWorkday({
             company: company.company,
             careerSite: company.careerSite,
             subdomain: company.subdomain,
+            ...(company.baseUrl ? { baseUrl: company.baseUrl } : {}),
           })
         );
         break;
@@ -42,7 +52,7 @@ export async function fetchAllJobs(config: Config): Promise<Job[]> {
     }
   }
 
-  const results = await Promise.allSettled(tasks);
+  const results = await allSettledConcurrent(tasks, FETCH_CONCURRENCY);
   const jobs: Job[] = [];
 
   for (const result of results) {
