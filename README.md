@@ -27,6 +27,7 @@ Open `config.json` and fill in your settings:
 | Field | Description |
 |---|---|
 | `jobTitles` | List of title strings to match against (case-insensitive substring) |
+| `excludeTitleWords` | Optional — reject jobs whose title contains any of these words/phrases (case-insensitive). Useful for filtering out seniority levels like `"Principal"`, `"Staff"`, or `"Lead"` when searching for individual-contributor roles. |
 | `intervalMinutes` | How often to poll in scheduled mode (default: 30) |
 | `stateRetentionDays` | How many days to remember seen jobs before pruning them (default: 90) |
 | `minSalary` | Optional — exclude jobs whose listed salary is entirely below this annual amount |
@@ -189,7 +190,7 @@ Set a custom port with the `PORT` environment variable:
 PORT=8080 npm run dashboard
 ```
 
-> `job_history.json` is created automatically and is excluded from version control. It is **not** populated by `npm run dry-run` — only real check runs that successfully send an email write to it.
+> `job_history.json` is created automatically and is excluded from version control. It is **not** populated by `npm run dry-run` — only real check runs that successfully send an email write to it. Jobs that disappear from their source boards are also removed from this file automatically (see [How it works](#how-it-works)).
 
 ### Dry-run
 
@@ -204,13 +205,13 @@ Use `npm run dry-run` to validate your config and boards before a real run:
   ashby / OpenAI: 87 job(s) fetched
   lever / Plaid: 23 job(s) fetched
 
-[dry-run] Total fetched: 152 | Title matches: 9
+[dry-run] Total fetched: 152 | Matches: 9
 [dry-run] Matched jobs:
   · Software Engineer @ Airbnb | $150K–$200K/yr — https://…
   · Backend Engineer @ Plaid — https://…
   …
 
-[dry-run] Done. No email sent, no state changed.
+[dry-run] Done in 18.3s. No email sent, no state changed.
 ```
 
 ---
@@ -310,3 +311,4 @@ Exits with code 1 if any board fails, making it usable as a pre/post regression 
 4. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted (minute-level precision for same-day postings) and salary when available.
 5. Previously seen jobs are tracked in `seen_jobs.json` (created automatically, do not commit). Entries older than `stateRetentionDays` (default 90) are pruned on each run to keep the file bounded. If an email send fails, state is not updated so jobs are retried next run.
 6. After a successful email send, full job objects (title, company, salary, URL, etc.) are appended to `job_history.json` with the time the alert was sent. The local dashboard reads this file. Neither file should be committed — both are in `.gitignore`.
+7. **Stale listing removal:** after each fetch, the set of currently live job keys is compared against the previous run's set. Any job that was previously on the boards but is no longer returned is removed from `job_history.json` and from `seen_jobs.json`, keeping the dashboard current. If the posting ever reappears, you'll be notified again. Two guards prevent false removals: removal is skipped entirely on the first run, and skipped if the fetch returns zero jobs (indicating a network failure rather than boards going empty).

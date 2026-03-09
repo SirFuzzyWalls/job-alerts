@@ -34,6 +34,7 @@ export type CompanyConfig =
 
 export interface Config {
   jobTitles: string[];
+  excludeTitleWords?: string[];
   intervalMinutes: number;
   stateRetentionDays: number;
   minSalary?: number;

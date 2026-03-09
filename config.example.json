@@ -1,5 +1,6 @@
 {
   "jobTitles": ["Software Engineer", "Backend Engineer"],
+  "excludeTitleWords": ["Principal", "Staff", "Lead", "Director", "Manager"],
   "intervalMinutes": 30,
   "stateRetentionDays": 90,
 

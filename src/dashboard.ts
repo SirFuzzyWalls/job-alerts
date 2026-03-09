@@ -290,6 +290,11 @@ const HTML = `<!DOCTYPE html>
     <button id="locateBtn">Use my location</button>
     <input type="text" id="locationSearch" placeholder="Search a city&hellip;">
     <button id="locationGo">Go</button>
+    <select id="mapDays">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+    </select>
     <span class="map-note" id="mapNote"></span>
   </div>
   <div id="map"></div>
@@ -535,41 +540,58 @@ async function initMap() {
   await loadLeaflet();
 
   const map = L.map("map").setView([39.5, -98.35], 4);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 20
   }).addTo(map);
 
-  let data;
-  try {
-    const res = await fetch("/api/map-jobs");
-    data = await res.json();
-  } catch (err) {
-    mapNote.textContent = "Error loading job locations: " + err.message;
-    return;
-  }
-
-  if (data.jobs.length === 0) {
-    mapNote.textContent = "No mappable job locations yet \u2014 jobs with 'Remote' or no location can't be plotted.";
-    return;
-  }
-
-  const cluster = L.markerClusterGroup();
-  for (const job of data.jobs) {
-    const parts = [
-      \`<strong>\${esc(job.title)}</strong>\`,
-      esc(job.company),
-      job.salary ? esc(job.salary) : null,
-      job.location ? esc(job.location) : null,
-      \`<a href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>\`
-    ].filter(Boolean);
-    L.marker([job.lat, job.lng]).bindPopup(parts.join("<br>")).addTo(cluster);
-  }
+  let cluster = L.markerClusterGroup();
   map.addLayer(cluster);
 
-  const skipped = data.skippedCount;
-  mapNote.textContent = skipped > 0
-    ? \`\${data.jobs.length} jobs mapped, \${skipped} skipped (remote/no location)\`
-    : \`\${data.jobs.length} jobs mapped\`;
+  async function loadMarkers(days) {
+    mapNote.textContent = "Loading\u2026";
+    let data;
+    try {
+      const res = await fetch(\`/api/map-jobs?days=\${days}\`);
+      data = await res.json();
+    } catch (err) {
+      mapNote.textContent = "Error loading job locations: " + err.message;
+      return;
+    }
+
+    cluster.clearLayers();
+
+    if (data.jobs.length === 0) {
+      mapNote.textContent = "No mappable job locations yet \u2014 jobs with 'Remote' or no location can't be plotted.";
+      return;
+    }
+
+    for (const job of data.jobs) {
+      const timeStr = relativePostedAt(job.postedAt)
+        ? "Posted " + relativePostedAt(job.postedAt)
+        : job.sentAt ? "Seen " + relativeTime(job.sentAt) : null;
+      const parts = [
+        \`<strong>\${esc(job.title)}</strong>\`,
+        esc(job.company),
+        job.salary ? esc(job.salary) : null,
+        job.location ? esc(job.location) : null,
+        timeStr ? esc(timeStr) : null,
+        \`<a href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>\`
+      ].filter(Boolean);
+      L.marker([job.lat, job.lng]).bindPopup(parts.join("<br>")).addTo(cluster);
+    }
+
+    const skipped = data.skippedCount;
+    mapNote.textContent = skipped > 0
+      ? \`\${data.jobs.length} jobs mapped, \${skipped} skipped (remote/no location)\`
+      : \`\${data.jobs.length} jobs mapped\`;
+  }
+
+  const mapDays = document.getElementById("mapDays");
+  await loadMarkers(mapDays.value);
+
+  mapDays.addEventListener("change", () => loadMarkers(mapDays.value));
 
   document.getElementById("locateBtn").addEventListener("click", () => {
     if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
@@ -627,7 +649,9 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/map-jobs") {
     (async () => {
-      const history = loadHistory();
+      const days = Math.max(1, parseInt(url.searchParams.get("days") ?? "30", 10) || 30);
+      const cutoff = Date.now() - days * 86_400_000;
+      const history = loadHistory().filter((j) => j.sentAt >= cutoff);
       const mappedJobs: any[] = [];
       let skippedCount = 0;
 
@@ -659,8 +683,13 @@ const server = http.createServer((req, res) => {
   res.end("Not found");
 });
 
-loadGeocodeCache();
+export function startDashboard(): void {
+  loadGeocodeCache();
+  server.listen(PORT, () => {
+    console.log(`[dashboard] Listening on http://localhost:${PORT}`);
+  });
+}
 
-server.listen(PORT, () => {
-  console.log(`[dashboard] Listening on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  startDashboard();
+}
