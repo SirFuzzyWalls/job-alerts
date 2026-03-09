@@ -1,6 +1,8 @@
 import cron from "node-cron";
 import { loadConfig } from "./config.js";
+import type { Config } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
+import type { Job } from "./sources/index.js";
 import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest, buildEmailBody } from "./notifier.js";
@@ -9,7 +11,19 @@ import { appendToHistory } from "./history.js";
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
 
+function applyFilters(jobs: Job[], config: Config): Job[] {
+  return jobs.filter(
+    (job) =>
+      matchesTitle(job.title, config.jobTitles) &&
+      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
+      matchesLocation(job.location, config.locations, config.sendIfNoLocation)
+  );
+}
+
+let checkRunning = false;
+
 async function runDryRun(): Promise<void> {
+  const t0 = Date.now();
   const config = loadConfig();
 
   const companyList = (config.companies ?? [])
@@ -35,12 +49,7 @@ async function runDryRun(): Promise<void> {
     console.log(`  ${key}: ${jobs.length} job(s) fetched`);
   }
 
-  const matched = allJobs.filter(
-    (job) =>
-      matchesTitle(job.title, config.jobTitles) &&
-      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
-      matchesLocation(job.location, config.locations, config.sendIfNoLocation)
-  );
+  const matched = applyFilters(allJobs, config);
   console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Matches: ${matched.length}`);
 
   if (matched.length > 0) {
@@ -55,10 +64,25 @@ async function runDryRun(): Promise<void> {
   console.log("\n--- Email preview ---");
   console.log(buildEmailBody(matched, config.jobTitles, config.locations, dryLastCheckAt, config.intervalMinutes));
   console.log("--- End of preview ---");
-  console.log("\n[dry-run] Done. No email sent, no state changed.");
+  console.log(`\n[dry-run] Done in ${((Date.now() - t0) / 1000).toFixed(1)}s. No email sent, no state changed.`);
 }
 
 async function runCheck(): Promise<void> {
+  if (checkRunning) {
+    console.warn("[check] Check already running, skipping.");
+    return;
+  }
+  checkRunning = true;
+  const t0 = Date.now();
+  try {
+    await _runCheck();
+  } finally {
+    checkRunning = false;
+    console.log(`[check] Done in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  }
+}
+
+async function _runCheck(): Promise<void> {
   const config = loadConfig();
   const { seen: rawSeen, isFirstRun, lastCheckAt } = loadState();
   const seen = pruneState(rawSeen, config.stateRetentionDays);
@@ -70,12 +94,7 @@ async function runCheck(): Promise<void> {
   const allJobs = await fetchAllJobs(config);
   console.log(`[check] Total jobs fetched: ${allJobs.length}`);
 
-  const matches = allJobs.filter(
-    (job) =>
-      matchesTitle(job.title, config.jobTitles) &&
-      matchesSalary(job.salaryMin, job.salaryMax, config.minSalary, config.maxSalary, config.sendIfNoSalary) &&
-      matchesLocation(job.location, config.locations, config.sendIfNoLocation)
-  );
+  const matches = applyFilters(allJobs, config);
 
   if (isFirstRun) {
     const now = Date.now();
@@ -111,7 +130,7 @@ async function runCheck(): Promise<void> {
     return;
   }
 
-  appendToHistory(newMatches, now);
+  appendToHistory(newMatches, now, config.stateRetentionDays);
 
   for (const job of newMatches) {
     seen[job.stateKey] = now;

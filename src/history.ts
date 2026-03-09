@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { Job } from "./sources/types.js";
+import { writeFileAtomic } from "./utils.js";
 
 export type JobRecord = Job & { sentAt: number };
 
@@ -17,13 +18,14 @@ export function loadHistory(): JobRecord[] {
   }
 }
 
-export function appendToHistory(jobs: Job[], sentAt: number = Date.now()): void {
-  const existing = loadHistory();
+export function appendToHistory(jobs: Job[], sentAt: number = Date.now(), retentionDays = 90): void {
+  let existing = loadHistory();
+  existing = pruneHistory(existing, retentionDays);
   const records: JobRecord[] = jobs.map((j) => ({ ...j, sentAt }));
   // Deduplicate by stateKey (in case of retry)
   const seen = new Set(existing.map((r) => r.stateKey));
   const newRecords = records.filter((r) => !seen.has(r.stateKey));
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify([...existing, ...newRecords], null, 2));
+  writeFileAtomic(HISTORY_FILE, JSON.stringify([...existing, ...newRecords], null, 2));
 }
 
 export function pruneHistory(records: JobRecord[], retentionDays: number): JobRecord[] {

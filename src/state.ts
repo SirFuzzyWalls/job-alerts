@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { writeFileAtomic } from "./utils.js";
 
 const STATE_FILE = path.resolve(process.cwd(), "seen_jobs.json");
 
@@ -44,7 +45,7 @@ export function pruneState(seen: SeenJobs, retentionDays: number): SeenJobs {
 
 export function saveState(seen: SeenJobs, lastCheckAt: number): void {
   try {
-    fs.writeFileSync(STATE_FILE, JSON.stringify({ seen, lastCheckAt }, null, 2), "utf-8");
+    writeFileAtomic(STATE_FILE, JSON.stringify({ seen, lastCheckAt }, null, 2));
   } catch (err) {
     console.error("[state] Failed to save seen_jobs.json:", err);
   }

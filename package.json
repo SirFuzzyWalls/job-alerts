@@ -2,6 +2,7 @@
   "name": "job-alerts",
   "version": "1.0.0",
   "description": "Local job alert notification system polling multiple ATS boards",
+  "engines": { "node": ">=18" },
   "scripts": {
     "start": "tsx src/index.ts",
     "check": "tsx src/index.ts --once",
