@@ -1,4 +1,6 @@
 import http from "http";
+import path from "path";
+import fs from "fs";
 import { loadHistory } from "./history.js";
 
 const PORT = parseInt(process.env.PORT ?? "3737", 10);
@@ -14,6 +16,60 @@ const SOURCE_COLORS: Record<string, string> = {
 
 function getBadgeColor(source: string): string {
   return SOURCE_COLORS[source.toLowerCase()] ?? "#6e7681";
+}
+
+// --- Geocoding ---
+
+const GEOCODE_CACHE_FILE = path.join(process.cwd(), "geocode_cache.json");
+const geocodeCache = new Map<string, { lat: number; lng: number } | null>();
+
+function loadGeocodeCache(): void {
+  try {
+    if (fs.existsSync(GEOCODE_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(GEOCODE_CACHE_FILE, "utf8")) as Record<string, { lat: number; lng: number } | null>;
+      for (const [k, v] of Object.entries(data)) {
+        geocodeCache.set(k, v);
+      }
+      console.log(`[dashboard] Loaded ${geocodeCache.size} cached geocode entries`);
+    }
+  } catch {
+    // ignore corrupt cache
+  }
+}
+
+function saveGeocodeCache(): void {
+  try {
+    fs.writeFileSync(GEOCODE_CACHE_FILE, JSON.stringify(Object.fromEntries(geocodeCache), null, 2));
+  } catch {
+    // ignore write errors
+  }
+}
+
+function normalizeLocation(raw: string): string | null {
+  let loc = raw.trim();
+  loc = loc.split("|")[0].split(";")[0].split("~")[0].trim();
+  if (!loc) return null;
+  if (/remote|work from home|worldwide|anywhere|flexible/i.test(loc)) return null;
+  return loc;
+}
+
+async function geocode(raw: string): Promise<{ lat: number; lng: number } | null> {
+  const location = normalizeLocation(raw);
+  if (!location) return null;
+  if (geocodeCache.has(location)) return geocodeCache.get(location)!;
+
+  await new Promise(r => setTimeout(r, 1000));
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`;
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "job-alerts-dashboard/1.0" } });
+    const data = await res.json() as any[];
+    const result = data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
+    geocodeCache.set(location, result);
+    saveGeocodeCache();
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 const HTML = `<!DOCTYPE html>
@@ -77,6 +133,18 @@ const HTML = `<!DOCTYPE html>
     border-radius: 6px; padding: 0.35rem 0.75rem; cursor: pointer; font-size: 0.875rem;
   }
   .theme-btn:hover { background: var(--border); }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 0.25rem; }
+  .tab-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 0.35rem 0.75rem; cursor: pointer; font-size: 0.875rem;
+  }
+  .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tab-btn:hover:not(.active) { background: var(--border); color: var(--text); }
+
+  /* Jobs panel */
+  #jobs-panel.hidden { display: none; }
 
   .controls {
     display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
@@ -157,39 +225,75 @@ const HTML = `<!DOCTYPE html>
   }
   #new-jobs-banner button:hover { background: rgba(255,255,255,0.35); }
   .banner-actions { display: flex; gap: 0.5rem; }
+
+  /* Map panel */
+  #map-panel { display: none; flex-direction: column; height: calc(100vh - 57px); overflow: hidden; }
+  #map-panel.visible { display: flex; }
+  .map-toolbar {
+    padding: 0.75rem 1.5rem; flex-shrink: 0;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+  }
+  .map-toolbar button {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.3rem 0.65rem; font-size: 0.875rem; cursor: pointer;
+  }
+  .map-toolbar button:hover { background: var(--border); }
+  .map-toolbar input[type="text"] {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.3rem 0.65rem; font-size: 0.875rem; outline: none;
+    min-width: 180px;
+  }
+  .map-note { font-size: 0.8rem; color: var(--muted); margin-left: auto; }
+  #map { flex: 1; min-height: 0; }
 </style>
 </head>
 <body>
 <header>
   <h1>Job Alert Dashboard</h1>
+  <div class="tab-bar">
+    <button class="tab-btn active" id="tabJobs">Jobs</button>
+    <button class="tab-btn" id="tabMap">Map</button>
+  </div>
   <button class="theme-btn" id="themeToggle">Toggle theme</button>
 </header>
-<div class="controls">
-  <label>
-    Per page:
-    <select id="pageSizeSelect">
-      <option value="10">10</option>
-      <option value="30">30</option>
-      <option value="50">50</option>
-    </select>
-  </label>
-  <div class="pagination">
-    <span class="page-info" id="pageInfo">—</span>
-    <button class="page-btn" id="prevBtn" disabled>&#8592; Prev</button>
-    <button class="page-btn" id="nextBtn" disabled>Next &#8594;</button>
+<div id="jobs-panel">
+  <div class="controls">
+    <label>
+      Per page:
+      <select id="pageSizeSelect">
+        <option value="10">10</option>
+        <option value="30">30</option>
+        <option value="50">50</option>
+      </select>
+    </label>
+    <div class="pagination">
+      <span class="page-info" id="pageInfo">—</span>
+      <button class="page-btn" id="prevBtn" disabled>&#8592; Prev</button>
+      <button class="page-btn" id="nextBtn" disabled>Next &#8594;</button>
+    </div>
   </div>
-</div>
-<div id="new-jobs-banner" role="alert" aria-live="polite">
-  <span id="banner-text"></span>
-  <div class="banner-actions">
-    <button id="banner-refresh">Refresh now</button>
-    <button id="banner-dismiss">Dismiss</button>
+  <div id="new-jobs-banner" role="alert" aria-live="polite">
+    <span id="banner-text"></span>
+    <div class="banner-actions">
+      <button id="banner-refresh">Refresh now</button>
+      <button id="banner-dismiss">Dismiss</button>
+    </div>
   </div>
+  <div id="status"></div>
+  <main>
+    <div class="grid" id="grid"></div>
+  </main>
 </div>
-<div id="status"></div>
-<main>
-  <div class="grid" id="grid"></div>
-</main>
+<div id="map-panel">
+  <div class="map-toolbar">
+    <button id="locateBtn">Use my location</button>
+    <input type="text" id="locationSearch" placeholder="Search a city&hellip;">
+    <button id="locationGo">Go</button>
+    <span class="map-note" id="mapNote"></span>
+  </div>
+  <div id="map"></div>
+</div>
 
 <script>
 const SOURCE_COLORS = {
@@ -272,7 +376,7 @@ async function fetchJobs(page, pageSize) {
 }
 
 async function loadPage(page) {
-  statusEl.textContent = "Loading…";
+  statusEl.textContent = "Loading\u2026";
   grid.innerHTML = "";
   try {
     const data = await fetchJobs(page, currentPageSize);
@@ -295,7 +399,7 @@ async function loadPage(page) {
 
     const start = (data.page - 1) * data.pageSize + 1;
     const end = start + data.jobs.length - 1;
-    pageInfo.textContent = \`Showing \${start}–\${end} of \${data.total}\`;
+    pageInfo.textContent = \`Showing \${start}\u2013\${end} of \${data.total}\`;
     prevBtn.disabled = data.page <= 1;
     nextBtn.disabled = data.page >= data.totalPages;
 
@@ -369,6 +473,129 @@ bannerDismiss.addEventListener("click", async () => {
 });
 
 setInterval(checkForNewJobs, 30_000);
+
+// --- Tab switching ---
+
+const tabJobs = document.getElementById("tabJobs");
+const tabMap = document.getElementById("tabMap");
+const jobsPanel = document.getElementById("jobs-panel");
+const mapPanel = document.getElementById("map-panel");
+let mapInitialized = false;
+
+function switchTab(tab) {
+  if (tab === "map") {
+    tabJobs.classList.remove("active");
+    tabMap.classList.add("active");
+    jobsPanel.classList.add("hidden");
+    mapPanel.classList.add("visible");
+    if (!mapInitialized) initMap();
+  } else {
+    tabMap.classList.remove("active");
+    tabJobs.classList.add("active");
+    mapPanel.classList.remove("visible");
+    jobsPanel.classList.remove("hidden");
+  }
+}
+
+tabJobs.addEventListener("click", () => switchTab("jobs"));
+tabMap.addEventListener("click", () => switchTab("map"));
+
+// --- Map ---
+
+function loadLeaflet() {
+  return new Promise(resolve => {
+    const cssUrls = [
+      "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css",
+      "https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css",
+      "https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    ];
+    for (const href of cssUrls) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = href;
+      document.head.appendChild(link);
+    }
+    const leafletJs = document.createElement("script");
+    leafletJs.src = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.js";
+    leafletJs.onload = () => {
+      const clusterJs = document.createElement("script");
+      clusterJs.src = "https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.min.js";
+      clusterJs.onload = resolve;
+      document.head.appendChild(clusterJs);
+    };
+    document.head.appendChild(leafletJs);
+  });
+}
+
+async function initMap() {
+  mapInitialized = true;
+  const mapNote = document.getElementById("mapNote");
+  mapNote.textContent = "Loading\u2026";
+
+  await loadLeaflet();
+
+  const map = L.map("map").setView([39.5, -98.35], 4);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+  }).addTo(map);
+
+  let data;
+  try {
+    const res = await fetch("/api/map-jobs");
+    data = await res.json();
+  } catch (err) {
+    mapNote.textContent = "Error loading job locations: " + err.message;
+    return;
+  }
+
+  if (data.jobs.length === 0) {
+    mapNote.textContent = "No mappable job locations yet \u2014 jobs with 'Remote' or no location can't be plotted.";
+    return;
+  }
+
+  const cluster = L.markerClusterGroup();
+  for (const job of data.jobs) {
+    const parts = [
+      \`<strong>\${esc(job.title)}</strong>\`,
+      esc(job.company),
+      job.salary ? esc(job.salary) : null,
+      job.location ? esc(job.location) : null,
+      \`<a href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>\`
+    ].filter(Boolean);
+    L.marker([job.lat, job.lng]).bindPopup(parts.join("<br>")).addTo(cluster);
+  }
+  map.addLayer(cluster);
+
+  const skipped = data.skippedCount;
+  mapNote.textContent = skipped > 0
+    ? \`\${data.jobs.length} jobs mapped, \${skipped} skipped (remote/no location)\`
+    : \`\${data.jobs.length} jobs mapped\`;
+
+  document.getElementById("locateBtn").addEventListener("click", () => {
+    if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+    navigator.geolocation.getCurrentPosition(pos => {
+      map.setView([pos.coords.latitude, pos.coords.longitude], 10);
+      L.marker([pos.coords.latitude, pos.coords.longitude])
+        .addTo(map).bindPopup("Your location").openPopup();
+    }, () => alert("Location access denied or unavailable."));
+  });
+
+  function searchLocation() {
+    const q = document.getElementById("locationSearch").value.trim();
+    if (!q) return;
+    fetch(\`https://nominatim.openstreetmap.org/search?q=\${encodeURIComponent(q)}&format=json&limit=1\`, {
+      headers: { "User-Agent": "job-alerts-dashboard/1.0" }
+    }).then(r => r.json()).then(d => {
+      if (d[0]) map.setView([parseFloat(d[0].lat), parseFloat(d[0].lon)], 10);
+      else alert("Location not found.");
+    }).catch(() => alert("Search failed."));
+  }
+
+  document.getElementById("locationGo").addEventListener("click", searchLocation);
+  document.getElementById("locationSearch").addEventListener("keydown", e => {
+    if (e.key === "Enter") searchLocation();
+  });
+}
 </script>
 </body>
 </html>`;
@@ -398,6 +625,30 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/map-jobs") {
+    (async () => {
+      const history = loadHistory();
+      const mappedJobs: any[] = [];
+      let skippedCount = 0;
+
+      for (const job of history) {
+        if (!job.location) { skippedCount++; continue; }
+        const coords = await geocode(job.location);
+        if (!coords) { skippedCount++; continue; }
+        mappedJobs.push({ ...job, lat: coords.lat, lng: coords.lng });
+      }
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ jobs: mappedJobs, skippedCount }));
+    })().catch(err => {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(err) }));
+      }
+    });
+    return;
+  }
+
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(HTML);
@@ -407,6 +658,8 @@ const server = http.createServer((req, res) => {
   res.writeHead(404, { "Content-Type": "text/plain" });
   res.end("Not found");
 });
+
+loadGeocodeCache();
 
 server.listen(PORT, () => {
   console.log(`[dashboard] Listening on http://localhost:${PORT}`);

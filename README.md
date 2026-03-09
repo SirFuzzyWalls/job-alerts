@@ -177,6 +177,11 @@ Open `http://localhost:3737` in your browser. The dashboard reads `job_history.j
   > *"3 new jobs available since you last loaded."*
 
   Click **Refresh now** to reload the grid, or **Dismiss** to hide the banner (it won't reappear for the same batch).
+- **Map tab** — plots alerted jobs geographically on an OpenStreetMap. Nearby jobs cluster into numbered circles that expand on click; individual markers show a popup with title, company, salary, and a link. Two location helpers are available in the toolbar:
+  - **Use my location** — browser prompts for permission, then pans the map to your coordinates
+  - **Search box** — type any city or address and press Enter / Go to pan there
+
+  Geocoding uses [Nominatim](https://nominatim.openstreetmap.org/) (free, no API key). Results are cached in `geocode_cache.json` so each unique location is only looked up once. Remote and no-location jobs are skipped and counted in the toolbar note. Map assets (Leaflet) are loaded from CDN only when the Map tab is first opened.
 
 Set a custom port with the `PORT` environment variable:
 

@@ -4,4 +4,5 @@ config.json
 state.json
 seen_jobs.json
 job_history.json
+geocode_cache.json
 .claude/
