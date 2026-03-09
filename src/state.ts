@@ -6,27 +6,22 @@ const STATE_FILE = path.resolve(process.cwd(), "seen_jobs.json");
 
 export type SeenJobs = Record<string, number>;
 
-export function loadState(): { seen: SeenJobs; isFirstRun: boolean; lastCheckAt: number | undefined } {
+export function loadState(): { seen: SeenJobs; isFirstRun: boolean; lastCheckAt: number | undefined; activeKeys: string[] } {
   if (!fs.existsSync(STATE_FILE)) {
-    return { seen: {}, isFirstRun: true, lastCheckAt: undefined };
+    return { seen: {}, isFirstRun: true, lastCheckAt: undefined, activeKeys: [] };
   }
   try {
     const raw = fs.readFileSync(STATE_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    // New format: { seen: {...}, lastCheckAt: number }
-    // Old format: flat { stateKey: timestamp, ... }
-    if ("seen" in parsed && typeof parsed.seen === "object" && parsed.seen !== null) {
-      return {
-        seen: parsed.seen as SeenJobs,
-        lastCheckAt: typeof parsed.lastCheckAt === "number" ? parsed.lastCheckAt : undefined,
-        isFirstRun: false,
-      };
-    }
-    // Backward compat: old flat format
-    return { seen: parsed as SeenJobs, lastCheckAt: undefined, isFirstRun: false };
+    const { seen, lastCheckAt, activeKeys } = JSON.parse(raw);
+    return {
+      seen: seen ?? {},
+      lastCheckAt: typeof lastCheckAt === "number" ? lastCheckAt : undefined,
+      activeKeys: Array.isArray(activeKeys) ? activeKeys : [],
+      isFirstRun: false,
+    };
   } catch (err) {
     console.warn("[state] Could not load seen_jobs.json, starting fresh:", err);
-    return { seen: {}, isFirstRun: false, lastCheckAt: undefined };
+    return { seen: {}, isFirstRun: false, lastCheckAt: undefined, activeKeys: [] };
   }
 }
 
@@ -34,18 +29,14 @@ export function pruneState(seen: SeenJobs, retentionDays: number): SeenJobs {
   const cutoff = Date.now() - retentionDays * 86_400_000;
   const pruned: SeenJobs = {};
   for (const [key, ts] of Object.entries(seen)) {
-    // Treat legacy `true` values (stored as boolean, number coerces to NaN/0) as 0 → pruned
-    const timestamp = typeof ts === "number" ? ts : 0;
-    if (timestamp > cutoff) {
-      pruned[key] = timestamp;
-    }
+    if (ts > cutoff) pruned[key] = ts;
   }
   return pruned;
 }
 
-export function saveState(seen: SeenJobs, lastCheckAt: number): void {
+export function saveState(seen: SeenJobs, lastCheckAt: number, activeKeys: string[]): void {
   try {
-    writeFileAtomic(STATE_FILE, JSON.stringify({ seen, lastCheckAt }, null, 2));
+    writeFileAtomic(STATE_FILE, JSON.stringify({ seen, lastCheckAt, activeKeys }, null, 2));
   } catch (err) {
     console.error("[state] Failed to save seen_jobs.json:", err);
   }

@@ -5,6 +5,7 @@
   "engines": { "node": ">=18" },
   "scripts": {
     "start": "tsx src/index.ts",
+    "dev": "tsx src/index.ts --dashboard",
     "check": "tsx src/index.ts --once",
     "dry-run": "tsx src/index.ts --dry-run",
     "probe": "tsx scripts/probe.ts",

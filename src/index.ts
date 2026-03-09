@@ -6,10 +6,11 @@ import type { Job } from "./sources/index.js";
 import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest, buildEmailBody } from "./notifier.js";
-import { appendToHistory } from "./history.js";
+import { appendToHistory, removeFromHistory } from "./history.js";
 
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
+const dashboardMode = process.argv.includes("--dashboard");
 
 function applyFilters(jobs: Job[], config: Config): Job[] {
   return jobs.filter(
@@ -84,7 +85,7 @@ async function runCheck(): Promise<void> {
 
 async function _runCheck(): Promise<void> {
   const config = loadConfig();
-  const { seen: rawSeen, isFirstRun, lastCheckAt } = loadState();
+  const { seen: rawSeen, isFirstRun, lastCheckAt, activeKeys: prevActiveKeys } = loadState();
   const seen = pruneState(rawSeen, config.stateRetentionDays);
 
   console.log(
@@ -94,6 +95,18 @@ async function _runCheck(): Promise<void> {
   const allJobs = await fetchAllJobs(config);
   console.log(`[check] Total jobs fetched: ${allJobs.length}`);
 
+  const activeNow = new Set(allJobs.map((j) => j.stateKey));
+
+  // Detect removals (skip if fetch returned nothing — likely a total failure)
+  if (allJobs.length > 0 && prevActiveKeys.length > 0) {
+    const removedKeys = new Set(prevActiveKeys.filter((k) => !activeNow.has(k) && k in seen));
+    if (removedKeys.size > 0) {
+      removeFromHistory(removedKeys);
+      for (const k of removedKeys) delete seen[k];
+      console.log(`[check] Removed ${removedKeys.size} job(s) no longer listed on boards.`);
+    }
+  }
+
   const matches = applyFilters(allJobs, config);
 
   if (isFirstRun) {
@@ -101,7 +114,7 @@ async function _runCheck(): Promise<void> {
     for (const job of matches) {
       seen[job.stateKey] = now;
     }
-    saveState(seen, now);
+    saveState(seen, now, [...activeNow]);
     console.log(
       `[check] First run — seeded ${matches.length} matching job(s) as seen. No email sent.`
     );
@@ -117,6 +130,7 @@ async function _runCheck(): Promise<void> {
 
   if (newMatches.length === 0) {
     console.log("[check] Nothing new — no email sent.");
+    saveState(seen, lastCheckAt ?? Date.now(), [...activeNow]);
     return;
   }
 
@@ -135,7 +149,7 @@ async function _runCheck(): Promise<void> {
   for (const job of newMatches) {
     seen[job.stateKey] = now;
   }
-  saveState(seen, now);
+  saveState(seen, now, [...activeNow]);
 
   console.log(
     `[check] Marked ${newMatches.length} job(s) as seen. State saved.`
@@ -146,6 +160,11 @@ async function main(): Promise<void> {
   if (dryRunMode) {
     await runDryRun();
     return;
+  }
+
+  if (dashboardMode) {
+    const { startDashboard } = await import("./dashboard.js");
+    startDashboard();
   }
 
   // Load config once to validate before scheduling

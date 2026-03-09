@@ -28,6 +28,11 @@ export function appendToHistory(jobs: Job[], sentAt: number = Date.now(), retent
   writeFileAtomic(HISTORY_FILE, JSON.stringify([...existing, ...newRecords], null, 2));
 }
 
+export function removeFromHistory(stateKeys: Set<string>): void {
+  const records = loadHistory().filter((r) => !stateKeys.has(r.stateKey));
+  writeFileAtomic(HISTORY_FILE, JSON.stringify(records, null, 2));
+}
+
 export function pruneHistory(records: JobRecord[], retentionDays: number): JobRecord[] {
   const cutoff = Date.now() - retentionDays * 86_400_000;
   return records.filter((r) => r.sentAt >= cutoff);
