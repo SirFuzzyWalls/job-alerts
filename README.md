@@ -154,8 +154,37 @@ You can mix IDs and inline objects freely. If you figure out the parameters for 
 | `npm start` | Run on a recurring schedule (uses `intervalMinutes`) |
 | `npm run check` | Fetch once, send digest if matches found, then exit |
 | `npm run dry-run` | Fetch jobs and print matches — **no email sent, no state saved** |
+| `npm run dashboard` | Start the local web dashboard at `http://localhost:3737` |
 | `npm run probe -- <url>` | Auto-detect ATS from a careers page URL, test the API, and interactively add to `boards.json` |
 | `npm run validate-boards` | Probe every entry in `boards.json` and report pass/fail — exits 1 if any board returns 0 jobs |
+
+### Dashboard
+
+`npm run dashboard` starts a lightweight local web server (no extra dependencies) that lets you browse all previously sent job alerts without digging through your inbox.
+
+```
+npm run dashboard
+# [dashboard] Listening on http://localhost:3737
+```
+
+Open `http://localhost:3737` in your browser. The dashboard reads `job_history.json`, which is written automatically after each successful email digest.
+
+**Features:**
+- Paginated card grid — 10 / 30 / 50 jobs per page
+- Dark/light mode toggle (defaults to system preference, persisted across reloads)
+- Each card shows title, company, source badge, location, salary, how long ago it was posted, and a direct link to the listing
+- **New-job notifications** — while the dashboard is open, it polls the server every 30 seconds. If new jobs have been alerted since you loaded the page, a banner appears at the top:
+  > *"3 new jobs available since you last loaded."*
+
+  Click **Refresh now** to reload the grid, or **Dismiss** to hide the banner (it won't reappear for the same batch).
+
+Set a custom port with the `PORT` environment variable:
+
+```bash
+PORT=8080 npm run dashboard
+```
+
+> `job_history.json` is created automatically and is excluded from version control. It is **not** populated by `npm run dry-run` — only real check runs that successfully send an email write to it.
 
 ### Dry-run
 
@@ -275,3 +304,4 @@ Exits with code 1 if any board fails, making it usable as a pre/post regression 
 3. **First run:** all matches are silently marked as seen — no email is sent. This prevents a blast of hundreds of jobs on a fresh install. From the second run onward, only genuinely new postings trigger an email.
 4. New matches are emailed as a digest, sorted by posting date (most recent first). Each job shows how long ago it was posted (minute-level precision for same-day postings) and salary when available.
 5. Previously seen jobs are tracked in `seen_jobs.json` (created automatically, do not commit). Entries older than `stateRetentionDays` (default 90) are pruned on each run to keep the file bounded. If an email send fails, state is not updated so jobs are retried next run.
+6. After a successful email send, full job objects (title, company, salary, URL, etc.) are appended to `job_history.json` with the time the alert was sent. The local dashboard reads this file. Neither file should be committed — both are in `.gitignore`.
