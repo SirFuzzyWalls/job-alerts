@@ -1,0 +1,32 @@
+import fs from "fs";
+import path from "path";
+import type { Job } from "./sources/types.js";
+
+export type JobRecord = Job & { sentAt: number };
+
+const HISTORY_FILE = path.join(process.cwd(), "job_history.json");
+
+export function loadHistory(): JobRecord[] {
+  if (!fs.existsSync(HISTORY_FILE)) return [];
+  try {
+    const raw = fs.readFileSync(HISTORY_FILE, "utf-8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function appendToHistory(jobs: Job[], sentAt: number = Date.now()): void {
+  const existing = loadHistory();
+  const records: JobRecord[] = jobs.map((j) => ({ ...j, sentAt }));
+  // Deduplicate by stateKey (in case of retry)
+  const seen = new Set(existing.map((r) => r.stateKey));
+  const newRecords = records.filter((r) => !seen.has(r.stateKey));
+  fs.writeFileSync(HISTORY_FILE, JSON.stringify([...existing, ...newRecords], null, 2));
+}
+
+export function pruneHistory(records: JobRecord[], retentionDays: number): JobRecord[] {
+  const cutoff = Date.now() - retentionDays * 86_400_000;
+  return records.filter((r) => r.sentAt >= cutoff);
+}

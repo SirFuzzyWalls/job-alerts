@@ -4,6 +4,7 @@ import { fetchAllJobs } from "./sources/index.js";
 import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest, buildEmailBody } from "./notifier.js";
+import { appendToHistory } from "./history.js";
 
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
@@ -109,6 +110,8 @@ async function runCheck(): Promise<void> {
     // Don't mark jobs as seen if the email failed
     return;
   }
+
+  appendToHistory(newMatches, now);
 
   for (const job of newMatches) {
     seen[job.stateKey] = now;
