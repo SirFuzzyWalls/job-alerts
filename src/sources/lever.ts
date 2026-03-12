@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry, fmtSalaryK } from "../utils.js";
+import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
 
 interface LeverPosting {
   id: string;
@@ -8,6 +8,7 @@ interface LeverPosting {
   categories?: { location?: string };
   createdAt?: number;
   salaryRange?: { min?: number; max?: number; currency?: string; interval?: string };
+  description?: string;
 }
 
 function toAnnual(value: number, interval: string): number {
@@ -74,6 +75,7 @@ export async function fetchLever(slug: string): Promise<Job[]> {
       salary,
       salaryMin,
       salaryMax,
+      qualifications: parseQualifications(p.description ?? ""),
     };
   });
 }

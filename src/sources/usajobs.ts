@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry, fmtSalaryK } from "../utils.js";
+import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
 
 interface USAJobsConfig {
   apiKey: string;
@@ -15,6 +15,8 @@ interface USAJobsPosition {
   PublicationStartDate?: string;
   SalaryMin?: string;
   SalaryMax?: string;
+  QualificationSummary?: string;
+  UserArea?: { Details?: { Requirements?: string; Education?: string } };
 }
 
 function parseSalaryStr(s: string): number | undefined {
@@ -81,6 +83,11 @@ export async function fetchUSAJobs(
         salary = `${fmtSalaryK(salaryMin)}+/yr`;
       }
 
+      const qualText = [
+        pos.QualificationSummary,
+        pos.UserArea?.Details?.Requirements,
+        pos.UserArea?.Details?.Education,
+      ].filter(Boolean).join(" ");
       jobs.push({
         id: pos.PositionID,
         stateKey: `usajobs-${pos.PositionID}`,
@@ -93,6 +100,7 @@ export async function fetchUSAJobs(
         salary,
         salaryMin,
         salaryMax,
+        qualifications: qualText ? parseQualifications(qualText) : undefined,
       });
     }
   }

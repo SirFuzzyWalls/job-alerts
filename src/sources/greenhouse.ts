@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { parseSalaryText, fetchWithRetry } from "../utils.js";
+import { parseSalaryText, parseQualifications, fetchWithRetry } from "../utils.js";
 
 interface GreenhouseJob {
   id: number;
@@ -38,6 +38,7 @@ export async function fetchGreenhouse(slug: string): Promise<Job[]> {
     const { salary, salaryMin, salaryMax } = j.content
       ? parseSalaryText(j.content)
       : {};
+    const qualifications = parseQualifications(j.content ?? "");
     return {
       id: String(j.id),
       stateKey: `greenhouse-${slug}-${j.id}`,
@@ -50,6 +51,7 @@ export async function fetchGreenhouse(slug: string): Promise<Job[]> {
       salary,
       salaryMin,
       salaryMax,
+      qualifications,
     };
   });
 }

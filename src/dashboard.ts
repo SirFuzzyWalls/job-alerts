@@ -365,6 +365,8 @@ function renderCard(job) {
     ? \`<span class="meta-item">&#128205; \${esc(job.location)}</span>\` : "";
   const salary = job.salary
     ? \`<span class="meta-item">&#128176; \${esc(job.salary)}</span>\` : "";
+  const qualifications = job.qualifications
+    ? \`<span class="meta-item">&#127891; \${esc(job.qualifications)}</span>\` : "";
   const posted = relativePostedAt(job.postedAt)
     ? \`<span class="meta-item">&#128337; \${esc(relativePostedAt(job.postedAt))}</span>\` : "";
   const alerted = job.sentAt ? relativeTime(job.sentAt) : null;
@@ -376,7 +378,7 @@ function renderCard(job) {
         <span class="badge" style="background:\${badgeColor(job.source)}">\${esc(job.source)}</span>
       </div>
       <div class="card-company">\${esc(job.company)}</div>
-      <div class="card-meta">\${location}\${salary}\${posted}</div>
+      <div class="card-meta">\${salary}\${qualifications}\${location}\${posted}</div>
       <div class="card-footer">
         <span class="alerted-text">\${alerted ? "Alerted " + esc(alerted) : ""}</span>
         <a class="view-btn" href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>

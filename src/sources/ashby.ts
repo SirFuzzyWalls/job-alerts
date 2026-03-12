@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry } from "../utils.js";
+import { fetchWithRetry, parseQualifications } from "../utils.js";
 
 interface AshbyCompensationComponent {
   compensationType: string;
@@ -16,6 +16,7 @@ interface AshbyJob {
   isListed: boolean;
   locationName?: string;
   publishedDate?: string;
+  descriptionHtml?: string;
   department?: { name?: string };
   compensation?: {
     compensationTierSummary?: string;
@@ -73,6 +74,7 @@ export async function fetchAshby(slug: string): Promise<Job[]> {
         salary,
         salaryMin,
         salaryMax,
+        qualifications: parseQualifications(j.descriptionHtml ?? ""),
       };
     });
 }
