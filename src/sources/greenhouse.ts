@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { parseSalaryText } from "../utils.js";
+import { parseSalaryText, fetchWithRetry } from "../utils.js";
 
 interface GreenhouseJob {
   id: number;
@@ -15,7 +15,7 @@ export async function fetchGreenhouse(slug: string): Promise<Job[]> {
 
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetchWithRetry(url, {});
   } catch (err) {
     console.error(`[greenhouse:${slug}] Network error:`, err);
     return [];

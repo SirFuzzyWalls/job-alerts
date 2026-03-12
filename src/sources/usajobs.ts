@@ -1,4 +1,5 @@
 import type { Job } from "./types.js";
+import { fetchWithRetry, fmtSalaryK } from "../utils.js";
 
 interface USAJobsConfig {
   apiKey: string;
@@ -21,10 +22,6 @@ function parseSalaryStr(s: string): number | undefined {
   return isFinite(n) ? n : undefined;
 }
 
-function fmtK(n: number): string {
-  return `$${Math.round(n / 1000)}K`;
-}
-
 export async function fetchUSAJobs(
   jobTitles: string[],
   config: USAJobsConfig
@@ -39,7 +36,7 @@ export async function fetchUSAJobs(
 
     let res: Response;
     try {
-      res = await fetch(url.toString(), {
+      res = await fetchWithRetry(url.toString(), {
         headers: {
           Host: "data.usajobs.gov",
           "Authorization-Key": config.apiKey,
@@ -79,9 +76,9 @@ export async function fetchUSAJobs(
 
       let salary: string | undefined;
       if (salaryMin != null && salaryMax != null) {
-        salary = `${fmtK(salaryMin)}–${fmtK(salaryMax)}/yr`;
+        salary = `${fmtSalaryK(salaryMin)}–${fmtSalaryK(salaryMax)}/yr`;
       } else if (salaryMin != null) {
-        salary = `${fmtK(salaryMin)}+/yr`;
+        salary = `${fmtSalaryK(salaryMin)}+/yr`;
       }
 
       jobs.push({

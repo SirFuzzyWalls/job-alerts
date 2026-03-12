@@ -1,4 +1,5 @@
 import type { Job } from "./types.js";
+import { fetchWithRetry } from "../utils.js";
 
 interface AshbyCompensationComponent {
   compensationType: string;
@@ -27,7 +28,7 @@ export async function fetchAshby(slug: string): Promise<Job[]> {
 
   let res: Response;
   try {
-    res = await fetch(url, {
+    res = await fetchWithRetry(url, {
       headers: { "Content-Type": "application/json" },
     });
   } catch (err) {

@@ -20,6 +20,23 @@ function getBadgeColor(source: string): string {
 
 // --- Geocoding ---
 
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
+interface MapJob {
+  lat: number;
+  lng: number;
+  title: string;
+  company: string;
+  url: string;
+  salary?: string;
+  postedAt?: string;
+  sentAt: number;
+}
+
 const GEOCODE_CACHE_FILE = path.join(process.cwd(), "geocode_cache.json");
 const geocodeCache = new Map<string, { lat: number; lng: number } | null>();
 
@@ -62,7 +79,7 @@ async function geocode(raw: string): Promise<{ lat: number; lng: number } | null
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`;
   try {
     const res = await fetch(url, { headers: { "User-Agent": "job-alerts-dashboard/1.0" } });
-    const data = await res.json() as any[];
+    const data = await res.json() as NominatimResult[];
     const result = data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
     geocodeCache.set(location, result);
     saveGeocodeCache();
@@ -315,14 +332,7 @@ const HTML = `<!DOCTYPE html>
 </div>
 
 <script>
-const SOURCE_COLORS = {
-  greenhouse: "#2ea043",
-  lever: "#d4680a",
-  ashby: "#8957e5",
-  workday: "#1f6feb",
-  "hacker news": "#e05d4b",
-  usajobs: "#1a9e8f",
-};
+const SOURCE_COLORS = ${JSON.stringify(SOURCE_COLORS)};
 
 function badgeColor(source) {
   return SOURCE_COLORS[source.toLowerCase()] || "#6e7681";
@@ -723,7 +733,7 @@ const server = http.createServer((req, res) => {
       const days = Math.max(1, parseInt(url.searchParams.get("days") ?? "30", 10) || 30);
       const cutoff = Date.now() - days * 86_400_000;
       const history = loadHistory().filter((j) => j.sentAt >= cutoff);
-      const mappedJobs: any[] = [];
+      const mappedJobs: MapJob[] = [];
       let skippedCount = 0;
 
       for (const job of history) {

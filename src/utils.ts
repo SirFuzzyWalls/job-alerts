@@ -9,7 +9,7 @@ function parseAmount(digits: string, hasK: boolean): number {
   return hasK ? n * 1000 : n;
 }
 
-function fmtSalaryK(n: number): string {
+export function fmtSalaryK(n: number): string {
   return `$${Math.round(n / 1000)}K`;
 }
 
