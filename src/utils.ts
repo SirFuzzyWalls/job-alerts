@@ -1,5 +1,42 @@
 import fs from "fs";
 
+function stripTags(s: string): string {
+  return s.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+}
+
+function parseAmount(digits: string, hasK: boolean): number {
+  const n = parseFloat(digits.replace(/,/g, ""));
+  return hasK ? n * 1000 : n;
+}
+
+function fmtSalaryK(n: number): string {
+  return `$${Math.round(n / 1000)}K`;
+}
+
+/**
+ * Scans free-form text (HTML ok) for a salary range like "$120,000–$160,000"
+ * or "$120K–$160K". Returns undefined fields if no plausible annual salary found.
+ */
+export function parseSalaryText(raw: string): {
+  salary?: string;
+  salaryMin?: number;
+  salaryMax?: number;
+} {
+  const text = stripTags(raw);
+  const m = text.match(
+    /\$\s*([\d,]+)\s*(k)?\s*(?:[-–—]|to)\s*\$?\s*([\d,]+)\s*(k)?/i
+  );
+  if (!m) return {};
+  const min = parseAmount(m[1], !!m[2]);
+  const max = parseAmount(m[3], !!m[4]);
+  if (min < 10_000 || max < 10_000) return {};
+  return {
+    salary: `${fmtSalaryK(min)}–${fmtSalaryK(max)}/yr`,
+    salaryMin: min,
+    salaryMax: max,
+  };
+}
+
 export function writeFileAtomic(filePath: string, content: string): void {
   const tmp = filePath + ".tmp";
   fs.writeFileSync(tmp, content, "utf-8");

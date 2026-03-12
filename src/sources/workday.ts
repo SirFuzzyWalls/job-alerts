@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry } from "../utils.js";
+import { fetchWithRetry, parseSalaryText } from "../utils.js";
 
 interface WorkdayCompanyConfig {
   company: string;
@@ -76,6 +76,10 @@ export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
       ? `${baseUrl}/en-US/${careerSite}${rawPath}`
       : `${baseUrl}/en-US/${careerSite}/job/${id}`;
 
+    const bulletText = (p.bulletFields ?? []).join(" ");
+    const { salary, salaryMin, salaryMax } = bulletText
+      ? parseSalaryText(bulletText)
+      : {};
     return {
       id,
       stateKey: `workday-${company}-${id}`,
@@ -85,6 +89,9 @@ export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
       source: "Workday",
       location: p.locationsText,
       postedAt: p.postedOn,
+      salary,
+      salaryMin,
+      salaryMax,
     };
   });
 }
