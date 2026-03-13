@@ -57,6 +57,7 @@ export function buildEmailBody(jobs: Job[], jobTitles: string[], locations?: str
     const when = job.postedAt ? ` — ${timeAgo(job.postedAt, now, lastCheckAt, intervalMinutes)}` : "";
     lines.push(`• ${job.title} @ ${job.company} (${job.source})${when}`);
     if (job.salary) lines.push(`  ${job.salary}`);
+    if (job.qualifications) lines.push(`  ${job.qualifications}`);
     if (job.location) lines.push(`  ${job.location}`);
     lines.push(`  ${job.url}`);
     lines.push("");

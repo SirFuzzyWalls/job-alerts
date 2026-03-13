@@ -4,8 +4,11 @@ A self-hosted job alert tool that polls company ATS boards and emails you a dige
 
 **Supported sources:** Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News
 
-**Previews:**
-![Dashboard](https://s13.gifyu.com/images/bmsMV.webp)
+**Local Dashboard Previews:**
+
+![Dashboard list view](assets/dashboard.png)
+
+![Dashboard map view](assets/map-view.png)
 
 ---
 

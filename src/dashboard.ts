@@ -20,6 +20,23 @@ function getBadgeColor(source: string): string {
 
 // --- Geocoding ---
 
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
+interface MapJob {
+  lat: number;
+  lng: number;
+  title: string;
+  company: string;
+  url: string;
+  salary?: string;
+  postedAt?: string;
+  sentAt: number;
+}
+
 const GEOCODE_CACHE_FILE = path.join(process.cwd(), "geocode_cache.json");
 const geocodeCache = new Map<string, { lat: number; lng: number } | null>();
 
@@ -62,7 +79,7 @@ async function geocode(raw: string): Promise<{ lat: number; lng: number } | null
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`;
   try {
     const res = await fetch(url, { headers: { "User-Agent": "job-alerts-dashboard/1.0" } });
-    const data = await res.json() as any[];
+    const data = await res.json() as NominatimResult[];
     const result = data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
     geocodeCache.set(location, result);
     saveGeocodeCache();
@@ -267,6 +284,17 @@ const HTML = `<!DOCTYPE html>
         <option value="50">50</option>
       </select>
     </label>
+    <label>
+      Sort:
+      <select id="sortSelect">
+        <option value="newest">Newest first</option>
+        <option value="salary-desc">Salary: High to Low</option>
+        <option value="salary-asc">Salary: Low to High</option>
+      </select>
+    </label>
+    <label>
+      <input type="checkbox" id="salaryOnly"> Salary only
+    </label>
     <div class="pagination">
       <span class="page-info" id="pageInfo">—</span>
       <button class="page-btn" id="prevBtn" disabled>&#8592; Prev</button>
@@ -295,20 +323,16 @@ const HTML = `<!DOCTYPE html>
       <option value="30" selected>Last 30 days</option>
       <option value="90">Last 90 days</option>
     </select>
+    <label style="font-size:0.875rem;color:var(--muted)">
+      <input type="checkbox" id="mapSalaryOnly"> Salary only
+    </label>
     <span class="map-note" id="mapNote"></span>
   </div>
   <div id="map"></div>
 </div>
 
 <script>
-const SOURCE_COLORS = {
-  greenhouse: "#2ea043",
-  lever: "#d4680a",
-  ashby: "#8957e5",
-  workday: "#1f6feb",
-  "hacker news": "#e05d4b",
-  usajobs: "#1a9e8f",
-};
+const SOURCE_COLORS = ${JSON.stringify(SOURCE_COLORS)};
 
 function badgeColor(source) {
   return SOURCE_COLORS[source.toLowerCase()] || "#6e7681";
@@ -341,6 +365,8 @@ function renderCard(job) {
     ? \`<span class="meta-item">&#128205; \${esc(job.location)}</span>\` : "";
   const salary = job.salary
     ? \`<span class="meta-item">&#128176; \${esc(job.salary)}</span>\` : "";
+  const qualifications = job.qualifications
+    ? \`<span class="meta-item">&#127891; \${esc(job.qualifications)}</span>\` : "";
   const posted = relativePostedAt(job.postedAt)
     ? \`<span class="meta-item">&#128337; \${esc(relativePostedAt(job.postedAt))}</span>\` : "";
   const alerted = job.sentAt ? relativeTime(job.sentAt) : null;
@@ -352,7 +378,7 @@ function renderCard(job) {
         <span class="badge" style="background:\${badgeColor(job.source)}">\${esc(job.source)}</span>
       </div>
       <div class="card-company">\${esc(job.company)}</div>
-      <div class="card-meta">\${location}\${salary}\${posted}</div>
+      <div class="card-meta">\${salary}\${qualifications}\${location}\${posted}</div>
       <div class="card-footer">
         <span class="alerted-text">\${alerted ? "Alerted " + esc(alerted) : ""}</span>
         <a class="view-btn" href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>
@@ -363,6 +389,8 @@ function renderCard(job) {
 
 let currentPage = 1;
 let currentPageSize = parseInt(localStorage.getItem("pageSize") || "10", 10);
+let currentSort = localStorage.getItem("sort") || "newest";
+let currentSalaryOnly = localStorage.getItem("salaryOnly") === "1";
 let totalJobs = 0;
 
 const grid = document.getElementById("grid");
@@ -375,7 +403,9 @@ const statusEl = document.getElementById("status");
 pageSizeSelect.value = String(currentPageSize);
 
 async function fetchJobs(page, pageSize) {
-  const res = await fetch(\`/api/jobs?page=\${page}&pageSize=\${pageSize}\`);
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sort: currentSort });
+  if (currentSalaryOnly) params.set("salaryOnly", "1");
+  const res = await fetch(\`/api/jobs?\${params}\`);
   if (!res.ok) throw new Error("API error: " + res.status);
   return res.json();
 }
@@ -419,6 +449,24 @@ nextBtn.addEventListener("click", () => loadPage(currentPage + 1));
 pageSizeSelect.addEventListener("change", () => {
   currentPageSize = parseInt(pageSizeSelect.value, 10);
   localStorage.setItem("pageSize", String(currentPageSize));
+  currentPage = 1;
+  loadPage(1);
+});
+
+const sortSelect = document.getElementById("sortSelect");
+const salaryOnlyCheck = document.getElementById("salaryOnly");
+sortSelect.value = currentSort;
+salaryOnlyCheck.checked = currentSalaryOnly;
+
+sortSelect.addEventListener("change", () => {
+  currentSort = sortSelect.value;
+  localStorage.setItem("sort", currentSort);
+  currentPage = 1;
+  loadPage(1);
+});
+salaryOnlyCheck.addEventListener("change", () => {
+  currentSalaryOnly = salaryOnlyCheck.checked;
+  localStorage.setItem("salaryOnly", currentSalaryOnly ? "1" : "0");
   currentPage = 1;
   loadPage(1);
 });
@@ -549,6 +597,9 @@ async function initMap() {
   let cluster = L.markerClusterGroup();
   map.addLayer(cluster);
 
+  let allMapJobs = [];
+  let apiSkippedCount = 0;
+
   async function loadMarkers(days) {
     mapNote.textContent = "Loading\u2026";
     let data;
@@ -559,15 +610,24 @@ async function initMap() {
       mapNote.textContent = "Error loading job locations: " + err.message;
       return;
     }
+    allMapJobs = data.jobs;
+    apiSkippedCount = data.skippedCount;
+    renderMapMarkers();
+  }
 
+  function renderMapMarkers() {
     cluster.clearLayers();
+    const salaryOnly = document.getElementById("mapSalaryOnly").checked;
+    const jobs = salaryOnly ? allMapJobs.filter(j => j.salary) : allMapJobs;
 
-    if (data.jobs.length === 0) {
-      mapNote.textContent = "No mappable job locations yet \u2014 jobs with 'Remote' or no location can't be plotted.";
+    if (jobs.length === 0) {
+      mapNote.textContent = salaryOnly && allMapJobs.length > 0
+        ? "No jobs with salary data in this period."
+        : "No mappable job locations yet \u2014 jobs with 'Remote' or no location can't be plotted.";
       return;
     }
 
-    for (const job of data.jobs) {
+    for (const job of jobs) {
       const timeStr = relativePostedAt(job.postedAt)
         ? "Posted " + relativePostedAt(job.postedAt)
         : job.sentAt ? "Seen " + relativeTime(job.sentAt) : null;
@@ -582,11 +642,13 @@ async function initMap() {
       L.marker([job.lat, job.lng]).bindPopup(parts.join("<br>")).addTo(cluster);
     }
 
-    const skipped = data.skippedCount;
-    mapNote.textContent = skipped > 0
-      ? \`\${data.jobs.length} jobs mapped, \${skipped} skipped (remote/no location)\`
-      : \`\${data.jobs.length} jobs mapped\`;
+    const totalSkipped = apiSkippedCount + (allMapJobs.length - jobs.length);
+    mapNote.textContent = totalSkipped > 0
+      ? \`\${jobs.length} jobs mapped, \${totalSkipped} skipped\`
+      : \`\${jobs.length} jobs mapped\`;
   }
+
+  document.getElementById("mapSalaryOnly").addEventListener("change", renderMapMarkers);
 
   const mapDays = document.getElementById("mapDays");
   await loadMarkers(mapDays.value);
@@ -636,7 +698,28 @@ const server = http.createServer((req, res) => {
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "10", 10)));
 
-    const history = loadHistory().sort((a, b) => b.sentAt - a.sentAt);
+    const sort = url.searchParams.get("sort") ?? "newest";
+    const salaryOnly = url.searchParams.get("salaryOnly") === "1";
+
+    let history = loadHistory();
+    if (salaryOnly) history = history.filter(j => j.salary);
+    if (sort === "salary-desc") {
+      history.sort((a, b) => {
+        if (a.salaryMin == null && b.salaryMin == null) return 0;
+        if (a.salaryMin == null) return 1;
+        if (b.salaryMin == null) return -1;
+        return b.salaryMin - a.salaryMin;
+      });
+    } else if (sort === "salary-asc") {
+      history.sort((a, b) => {
+        if (a.salaryMin == null && b.salaryMin == null) return 0;
+        if (a.salaryMin == null) return 1;
+        if (b.salaryMin == null) return -1;
+        return a.salaryMin - b.salaryMin;
+      });
+    } else {
+      history.sort((a, b) => b.sentAt - a.sentAt);
+    }
     const total = history.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const start = (page - 1) * pageSize;
@@ -652,7 +735,7 @@ const server = http.createServer((req, res) => {
       const days = Math.max(1, parseInt(url.searchParams.get("days") ?? "30", 10) || 30);
       const cutoff = Date.now() - days * 86_400_000;
       const history = loadHistory().filter((j) => j.sentAt >= cutoff);
-      const mappedJobs: any[] = [];
+      const mappedJobs: MapJob[] = [];
       let skippedCount = 0;
 
       for (const job of history) {

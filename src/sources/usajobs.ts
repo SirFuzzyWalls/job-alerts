@@ -1,4 +1,5 @@
 import type { Job } from "./types.js";
+import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
 
 interface USAJobsConfig {
   apiKey: string;
@@ -14,15 +15,13 @@ interface USAJobsPosition {
   PublicationStartDate?: string;
   SalaryMin?: string;
   SalaryMax?: string;
+  QualificationSummary?: string;
+  UserArea?: { Details?: { Requirements?: string; Education?: string } };
 }
 
 function parseSalaryStr(s: string): number | undefined {
   const n = parseFloat(s.replace(/[$,]/g, ""));
   return isFinite(n) ? n : undefined;
-}
-
-function fmtK(n: number): string {
-  return `$${Math.round(n / 1000)}K`;
 }
 
 export async function fetchUSAJobs(
@@ -39,7 +38,7 @@ export async function fetchUSAJobs(
 
     let res: Response;
     try {
-      res = await fetch(url.toString(), {
+      res = await fetchWithRetry(url.toString(), {
         headers: {
           Host: "data.usajobs.gov",
           "Authorization-Key": config.apiKey,
@@ -79,11 +78,16 @@ export async function fetchUSAJobs(
 
       let salary: string | undefined;
       if (salaryMin != null && salaryMax != null) {
-        salary = `${fmtK(salaryMin)}–${fmtK(salaryMax)}/yr`;
+        salary = `${fmtSalaryK(salaryMin)}–${fmtSalaryK(salaryMax)}/yr`;
       } else if (salaryMin != null) {
-        salary = `${fmtK(salaryMin)}+/yr`;
+        salary = `${fmtSalaryK(salaryMin)}+/yr`;
       }
 
+      const qualText = [
+        pos.QualificationSummary,
+        pos.UserArea?.Details?.Requirements,
+        pos.UserArea?.Details?.Education,
+      ].filter(Boolean).join(" ");
       jobs.push({
         id: pos.PositionID,
         stateKey: `usajobs-${pos.PositionID}`,
@@ -96,6 +100,7 @@ export async function fetchUSAJobs(
         salary,
         salaryMin,
         salaryMax,
+        qualifications: qualText ? parseQualifications(qualText) : undefined,
       });
     }
   }

@@ -1,4 +1,5 @@
 import type { Job } from "./types.js";
+import { parseQualifications } from "../utils.js";
 
 const JOB_STORIES_URL = "https://hacker-news.firebaseio.com/v0/jobstories.json";
 const ITEM_URL = (id: number) =>
@@ -87,6 +88,7 @@ export async function fetchHackerNews(): Promise<Job[]> {
       source: "Hacker News",
       postedAt: item.time ? new Date(item.time * 1000).toISOString() : undefined,
       location: extractLocation(item.title, item.text),
+      qualifications: item.text ? parseQualifications(item.text) : undefined,
     });
   }
 

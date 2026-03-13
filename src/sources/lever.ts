@@ -1,4 +1,5 @@
 import type { Job } from "./types.js";
+import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
 
 interface LeverPosting {
   id: string;
@@ -7,6 +8,7 @@ interface LeverPosting {
   categories?: { location?: string };
   createdAt?: number;
   salaryRange?: { min?: number; max?: number; currency?: string; interval?: string };
+  description?: string;
 }
 
 function toAnnual(value: number, interval: string): number {
@@ -17,16 +19,12 @@ function toAnnual(value: number, interval: string): number {
   return value; // yearly, per-year-salary, or unrecognized → assume annual
 }
 
-function fmtK(n: number): string {
-  return `$${Math.round(n / 1000)}K`;
-}
-
 export async function fetchLever(slug: string): Promise<Job[]> {
   const url = `https://api.lever.co/v0/postings/${slug}?mode=json`;
 
   let res: Response;
   try {
-    res = await fetch(url);
+    res = await fetchWithRetry(url, {});
   } catch (err) {
     console.error(`[lever:${slug}] Network error:`, err);
     return [];
@@ -58,11 +56,11 @@ export async function fetchLever(slug: string): Promise<Job[]> {
 
     let salary: string | undefined;
     if (salaryMin != null && salaryMax != null) {
-      salary = `${fmtK(salaryMin)}–${fmtK(salaryMax)}/yr`;
+      salary = `${fmtSalaryK(salaryMin)}–${fmtSalaryK(salaryMax)}/yr`;
     } else if (salaryMin != null) {
-      salary = `${fmtK(salaryMin)}+/yr`;
+      salary = `${fmtSalaryK(salaryMin)}+/yr`;
     } else if (salaryMax != null) {
-      salary = `up to ${fmtK(salaryMax)}/yr`;
+      salary = `up to ${fmtSalaryK(salaryMax)}/yr`;
     }
 
     return {
@@ -77,6 +75,7 @@ export async function fetchLever(slug: string): Promise<Job[]> {
       salary,
       salaryMin,
       salaryMax,
+      qualifications: parseQualifications(p.description ?? ""),
     };
   });
 }

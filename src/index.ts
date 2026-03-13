@@ -3,6 +3,7 @@ import { loadConfig } from "./config.js";
 import type { Config } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
 import type { Job } from "./sources/index.js";
+import { enrichWorkdayQualifications } from "./sources/workday.js";
 import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest, buildEmailBody } from "./notifier.js";
@@ -11,6 +12,7 @@ import { appendToHistory, removeFromHistory } from "./history.js";
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
 const dashboardMode = process.argv.includes("--dashboard");
+
 
 function applyFilters(jobs: Job[], config: Config): Job[] {
   return jobs.filter(
@@ -50,14 +52,15 @@ async function runDryRun(): Promise<void> {
     console.log(`  ${key}: ${jobs.length} job(s) fetched`);
   }
 
-  const matched = applyFilters(allJobs, config);
+  const matched = await enrichWorkdayQualifications(applyFilters(allJobs, config));
   console.log(`\n[dry-run] Total fetched: ${allJobs.length} | Matches: ${matched.length}`);
 
   if (matched.length > 0) {
     console.log("[dry-run] Matched jobs:");
     for (const job of matched) {
       const salaryStr = job.salary ? ` | ${job.salary}` : "";
-      console.log(`  · ${job.title} @ ${job.company}${salaryStr} — ${job.url}`);
+      const qualsStr = job.qualifications ? ` | ${job.qualifications}` : "";
+      console.log(`  · ${job.title} @ ${job.company}${salaryStr}${qualsStr} — ${job.url}`);
     }
   }
 
@@ -124,15 +127,17 @@ async function _runCheck(): Promise<void> {
     return;
   }
 
-  const newMatches = matches.filter((job) => !seen[job.stateKey]);
+  const rawNewMatches = matches.filter((job) => !seen[job.stateKey]);
 
-  console.log(`[check] New matches: ${newMatches.length}`);
+  console.log(`[check] New matches: ${rawNewMatches.length}`);
 
-  if (newMatches.length === 0) {
+  if (rawNewMatches.length === 0) {
     console.log("[check] Nothing new — no email sent.");
     saveState(seen, lastCheckAt ?? Date.now(), [...activeNow]);
     return;
   }
+
+  const newMatches = await enrichWorkdayQualifications(rawNewMatches);
 
   const now = Date.now();
 
