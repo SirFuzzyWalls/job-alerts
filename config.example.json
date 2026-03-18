@@ -35,5 +35,9 @@
   "excludeCompanies": ["twitch", "nubank"],
 
   "_companiesAlternative": "Or pick specific companies by ID from boards.json:",
-  "_companiesExample": ["airbnb", "openai", "stripe", "dell"]
+  "_companiesExample": ["airbnb", "openai", "stripe", "dell"],
+
+  "_aiScoringNote": "Optional AI match scoring via Ollama — set resumePath to a text file and ollamaModel to a pulled model (e.g. llama3). Run 'ollama serve' before starting the dashboard:",
+  "resumePath": "resume.txt",
+  "ollamaModel": "llama3"
 }

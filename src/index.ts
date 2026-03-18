@@ -8,10 +8,12 @@ import { matchesTitle, matchesSalary, matchesLocation } from "./matcher.js";
 import { loadState, pruneState, saveState } from "./state.js";
 import { sendDigest, buildEmailBody } from "./notifier.js";
 import { appendToHistory, removeFromHistory } from "./history.js";
+import { loadScores, scoreJob, OllamaUnavailableError } from "./scorer.js";
 
 const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
 const dashboardMode = process.argv.includes("--dashboard");
+const scoreMode = process.argv.includes("--score") || process.env.npm_config_score === "true";
 
 
 function applyFilters(jobs: Job[], config: Config): Job[] {
@@ -159,6 +161,23 @@ async function _runCheck(): Promise<void> {
   console.log(
     `[check] Marked ${newMatches.length} job(s) as seen. State saved.`
   );
+
+  if (scoreMode && config.resumePath) {
+    loadScores();
+    console.log(`[check] Scoring ${newMatches.length} new job(s)…`);
+    for (const job of newMatches) {
+      try {
+        const entry = await scoreJob(job, config.resumePath, config.ollamaModel);
+        console.log(`[check] Score: ${entry.score}/100 — ${job.title} @ ${job.company}`);
+      } catch (err) {
+        if (err instanceof OllamaUnavailableError) {
+          console.error(`[check] Ollama unavailable — skipping remaining scores.`);
+          break;
+        }
+        console.warn(`[check] Could not score "${job.title} @ ${job.company}": ${err}`);
+      }
+    }
+  }
 }
 
 async function main(): Promise<void> {

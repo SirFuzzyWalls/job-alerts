@@ -48,6 +48,8 @@ Open `config.json` and fill in your settings:
 | `hackernews` | Optional — set to `true` to include recent YC/startup job posts from Hacker News (no API key needed) |
 | `companies` | Which companies to monitor — see below |
 | `excludeCompanies` | IDs to skip when using `"all"` — see below |
+| `resumePath` | Optional — path to a plain-text resume file, used by AI match scoring (see below) |
+| `ollamaModel` | Optional — Ollama model to use for scoring (default: `llama3`) |
 
 ---
 
@@ -197,6 +199,40 @@ PORT=8080 npm run dashboard
 ```
 
 > `job_history.json` is created automatically and is excluded from version control. It is **not** populated by `npm run dry-run` — only real check runs that successfully send an email write to it. Jobs that disappear from their source boards are also removed from this file automatically (see [How it works](#how-it-works)).
+
+### AI match scoring
+
+Add `--score` to any run command to automatically score each new match against your resume using a local [Ollama](https://ollama.com) model. Scores are displayed in the dashboard and persist across restarts in `match_scores.json`.
+
+```bash
+npm start --score        # scheduled mode, score every new batch
+npm run check --score    # one-shot check + score
+npm run dev --score      # dashboard + scheduled, score new batches
+```
+
+**Setup:**
+
+1. Install and start Ollama: `ollama serve`
+2. Pull a model: `ollama pull llama3`
+3. Set `resumePath` and `ollamaModel` in `config.json`:
+
+```json
+"resumePath": "resume.txt",
+"ollamaModel": "llama3"
+```
+
+`resumePath` can be relative (resolved from the project root) or absolute. The resume should be plain text — paste your resume content directly.
+
+**How it works:**
+
+Each new job is scored 0–100 by sending the full job description (fetched live from the posting URL) plus your resume to Ollama. The model identifies:
+- Hard requirements met
+- Hard requirements missing (−15 pts each)
+- Preferred qualifications missing (−5 pts each)
+
+Clicking a score badge in the dashboard shows a popover with the missing items and the biggest gap.
+
+Scores are cached — a job is only scored once. Delete `match_scores.json` to force rescoring (e.g. after changing your resume or the prompt).
 
 ### Dry-run
 

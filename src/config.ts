@@ -46,6 +46,8 @@ export interface Config {
   usajobs?: USAJobsConfig;
   hackernews?: boolean;
   companies?: CompanyConfig[];
+  resumePath?: string;
+  ollamaModel?: string;
 }
 
 interface RawConfig {
@@ -62,6 +64,8 @@ interface RawConfig {
   hackernews?: boolean;
   companies?: "all" | (string | CompanyConfig)[];
   excludeCompanies?: string[];
+  resumePath?: string;
+  ollamaModel?: string;
 }
 
 export function loadConfig(): Config {
