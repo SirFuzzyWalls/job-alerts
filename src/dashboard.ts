@@ -390,7 +390,7 @@ function scoreColor(n) {
 }
 
 function scoreBadgeHtml(entry) {
-  const hasDetail = entry.hardMissing || entry.preferredMissing || entry.reason;
+  const hasDetail = entry.missingKeywords || entry.rewrites?.length || entry.reason;
   const clickAttr = hasDetail ? \` onclick="showScoreDetail(this, event)"\` : "";
   const dataAttr = hasDetail ? \` data-statekey="\${esc(entry.stateKey)}"\` : "";
   return \`<span class="score-badge \${scoreColor(entry.score)}"\${clickAttr}\${dataAttr}>\${entry.score}/100</span>\`;
@@ -414,15 +414,14 @@ function showScoreDetail(badge, event) {
   if (!entry) return;
 
   const lines = [];
-  if (entry.hardMissing && !/^none$/i.test(entry.hardMissing.trim())) {
-    lines.push(\`<strong>Hard reqs missing:</strong> \${esc(entry.hardMissing)}\`);
+  if (entry.missingKeywords && !/^none$/i.test(entry.missingKeywords)) {
+    lines.push(\`<strong>Missing keywords:</strong> \${esc(entry.missingKeywords)}\`);
   }
-  if (entry.preferredMissing && !/^none$/i.test(entry.preferredMissing.trim())) {
-    lines.push(\`<strong>Preferred missing:</strong> \${esc(entry.preferredMissing)}\`);
+  if (entry.rewrites?.length) {
+    lines.push(\`<strong>Suggested rewrites:</strong>\`);
+    for (const r of entry.rewrites) lines.push(\`• \${esc(r)}\`);
   }
-  if (entry.reason) {
-    lines.push(\`<em>\${esc(entry.reason)}</em>\`);
-  }
+  if (entry.reason) lines.push(\`<em>\${esc(entry.reason)}</em>\`);
   if (lines.length === 0) return;
 
   scorePopover.innerHTML = lines.join("<br>");
@@ -454,9 +453,9 @@ async function estimateMatch(btn) {
     });
     if (res.ok) {
       const data = await res.json();
-      const { score, reason, hardMet, hardMissing, preferredMissing } = data;
-      jobScores[stateKey] = { score, reason, hardMet, hardMissing, preferredMissing };
-      btn.outerHTML = scoreBadgeHtml({ stateKey, score, reason, hardMet, hardMissing, preferredMissing });
+      const { score, reason, missingKeywords, rewrites } = data;
+      jobScores[stateKey] = { score, reason, missingKeywords, rewrites };
+      btn.outerHTML = scoreBadgeHtml({ stateKey, score, reason, missingKeywords, rewrites });
     } else {
       btn.outerHTML = \`<span class="score-badge error">?</span>\`;
     }
