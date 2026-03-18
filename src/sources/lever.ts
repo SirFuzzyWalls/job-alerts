@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
+import { fetchWithRetry, fmtSalaryK, formatSalaryRange, parseQualifications } from "../utils.js";
 
 interface LeverPosting {
   id: string;
@@ -54,14 +54,8 @@ export async function fetchLever(slug: string): Promise<Job[]> {
     const salaryMin = sr?.min != null ? toAnnual(sr.min, interval) : undefined;
     const salaryMax = sr?.max != null ? toAnnual(sr.max, interval) : undefined;
 
-    let salary: string | undefined;
-    if (salaryMin != null && salaryMax != null) {
-      salary = `${fmtSalaryK(salaryMin)}–${fmtSalaryK(salaryMax)}/yr`;
-    } else if (salaryMin != null) {
-      salary = `${fmtSalaryK(salaryMin)}+/yr`;
-    } else if (salaryMax != null) {
-      salary = `up to ${fmtSalaryK(salaryMax)}/yr`;
-    }
+    const salary = formatSalaryRange(salaryMin ?? null, salaryMax ?? null)
+      ?? (salaryMax != null ? `up to ${fmtSalaryK(salaryMax)}/yr` : undefined);
 
     return {
       id: p.id,

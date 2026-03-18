@@ -8,7 +8,7 @@ export type JobRecord = Job & { sentAt: number };
 const HISTORY_FILE = path.join(process.cwd(), "job_history.json");
 
 export function loadHistory(): JobRecord[] {
-  if (!fs.existsSync(HISTORY_FILE)) return [];
+if (!fs.existsSync(HISTORY_FILE)) return [];
   try {
     const raw = fs.readFileSync(HISTORY_FILE, "utf-8");
     const parsed = JSON.parse(raw);
@@ -25,7 +25,12 @@ export function appendToHistory(jobs: Job[], sentAt: number = Date.now(), retent
   // Deduplicate by stateKey (in case of retry)
   const seen = new Set(existing.map((r) => r.stateKey));
   const newRecords = records.filter((r) => !seen.has(r.stateKey));
-  writeFileAtomic(HISTORY_FILE, JSON.stringify([...existing, ...newRecords], null, 2));
+  if (newRecords.length < records.length) {
+    console.log(`[history] Skipped ${records.length - newRecords.length} duplicate(s)`);
+  }
+  const updated = [...existing, ...newRecords];
+  console.log(`[history] Appended ${newRecords.length} record(s) (total: ${updated.length})`);
+  writeFileAtomic(HISTORY_FILE, JSON.stringify(updated, null, 2));
 }
 
 export function removeFromHistory(stateKeys: Set<string>): void {

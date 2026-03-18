@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { parseQualifications } from "../utils.js";
+import { fetchWithRetry, parseQualifications } from "../utils.js";
 
 const JOB_STORIES_URL = "https://hacker-news.firebaseio.com/v0/jobstories.json";
 const ITEM_URL = (id: number) =>
@@ -52,7 +52,7 @@ async function fetchItem(id: number): Promise<HNItem | null> {
 export async function fetchHackerNews(): Promise<Job[]> {
   let ids: number[];
   try {
-    const res = await fetch(JOB_STORIES_URL);
+    const res = await fetchWithRetry(JOB_STORIES_URL, {});
     if (!res.ok) {
       console.error(`[hackernews] HTTP ${res.status} fetching job stories`);
       return [];

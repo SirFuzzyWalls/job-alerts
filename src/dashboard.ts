@@ -14,6 +14,12 @@ function getConfig(): Config {
   return cachedConfig;
 }
 
+let historyCache: ReturnType<typeof loadHistory> | null = null;
+function getCachedHistory() {
+  if (!historyCache) historyCache = loadHistory();
+  return historyCache;
+}
+
 const SOURCE_COLORS: Record<string, string> = {
   greenhouse: "#2ea043",
   lever: "#d4680a",
@@ -84,10 +90,10 @@ async function geocode(raw: string): Promise<{ lat: number; lng: number } | null
   if (!location) return null;
   if (geocodeCache.has(location)) return geocodeCache.get(location)!;
 
-  await new Promise(r => setTimeout(r, 1000));
+  await new Promise(r => setTimeout(r, 1000)); // rate-limit only on real API calls
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`;
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "job-alerts-dashboard/1.0" } });
+    const res = await fetch(url, { headers: { "User-Agent": "job-alerts-dashboard/1.0" }, signal: AbortSignal.timeout(8_000) });
     const data = await res.json() as NominatimResult[];
     const result = data[0] ? { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) } : null;
     geocodeCache.set(location, result);
@@ -824,7 +830,7 @@ const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
   if (req.method === "GET" && url.pathname === "/api/count") {
-    const total = loadHistory().length;
+    const total = getCachedHistory().length;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ total }));
     return;
@@ -837,7 +843,7 @@ const server = http.createServer((req, res) => {
     const sort = url.searchParams.get("sort") ?? "newest";
     const salaryOnly = url.searchParams.get("salaryOnly") === "1";
 
-    let history = loadHistory();
+    let history = getCachedHistory().slice();
     if (salaryOnly) history = history.filter(j => j.salary);
     if (sort === "salary-desc") {
       history.sort((a, b) => {
@@ -870,7 +876,7 @@ const server = http.createServer((req, res) => {
     (async () => {
       const days = Math.max(1, parseInt(url.searchParams.get("days") ?? "30", 10) || 30);
       const cutoff = Date.now() - days * 86_400_000;
-      const history = loadHistory().filter((j) => j.sentAt >= cutoff);
+      const history = getCachedHistory().filter((j) => j.sentAt >= cutoff);
       const mappedJobs: MapJob[] = [];
       let skippedCount = 0;
 
@@ -919,7 +925,7 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      const job = loadHistory().find((j) => j.stateKey === stateKey);
+      const job = getCachedHistory().find((j) => j.stateKey === stateKey);
       if (!job) {
         res.writeHead(404, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Job not found" }));

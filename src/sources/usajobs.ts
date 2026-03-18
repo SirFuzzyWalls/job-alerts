@@ -1,5 +1,5 @@
 import type { Job } from "./types.js";
-import { fetchWithRetry, fmtSalaryK, parseQualifications } from "../utils.js";
+import { fetchWithRetry, formatSalaryRange, parseQualifications } from "../utils.js";
 
 interface USAJobsConfig {
   apiKey: string;
@@ -76,12 +76,7 @@ export async function fetchUSAJobs(
       const salaryMin = pos.SalaryMin ? parseSalaryStr(pos.SalaryMin) : undefined;
       const salaryMax = pos.SalaryMax ? parseSalaryStr(pos.SalaryMax) : undefined;
 
-      let salary: string | undefined;
-      if (salaryMin != null && salaryMax != null) {
-        salary = `${fmtSalaryK(salaryMin)}–${fmtSalaryK(salaryMax)}/yr`;
-      } else if (salaryMin != null) {
-        salary = `${fmtSalaryK(salaryMin)}+/yr`;
-      }
+      const salary = formatSalaryRange(salaryMin ?? null, salaryMax ?? null);
 
       const qualText = [
         pos.QualificationSummary,

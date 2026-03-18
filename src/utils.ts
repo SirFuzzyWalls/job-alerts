@@ -115,6 +115,12 @@ export function parseQualifications(raw: string): string | undefined {
   return parts.length > 0 ? parts.join(" • ") : undefined;
 }
 
+export function formatSalaryRange(min: number | null, max: number | null): string | undefined {
+  if (min != null && max != null) return `${fmtSalaryK(min)}–${fmtSalaryK(max)}/yr`;
+  if (min != null) return `${fmtSalaryK(min)}+/yr`;
+  return undefined;
+}
+
 export function writeFileAtomic(filePath: string, content: string): void {
   const tmp = filePath + ".tmp";
   fs.writeFileSync(tmp, content, "utf-8");

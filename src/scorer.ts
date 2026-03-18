@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { writeFileAtomic } from "./utils.js";
-import type { JobRecord } from "./history.js";
+import type { Job } from "./sources/types.js";
 
 const SCORES_FILE = path.join(process.cwd(), "match_scores.json");
 
@@ -70,7 +70,7 @@ async function fetchJobDescription(url: string): Promise<string | null> {
 }
 
 export async function scoreJob(
-  job: JobRecord,
+  job: Job,
   resumePath: string,
   ollamaModel = "llama3"
 ): Promise<ScoreEntry> {
