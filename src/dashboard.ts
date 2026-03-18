@@ -2,6 +2,8 @@ import http from "http";
 import path from "path";
 import fs from "fs";
 import { loadHistory } from "./history.js";
+import { loadConfig } from "./config.js";
+import { scoreJob, loadScores, getAllScores, OllamaUnavailableError } from "./scorer.js";
 
 const PORT = parseInt(process.env.PORT ?? "3737", 10);
 
@@ -218,6 +220,31 @@ const HTML = `<!DOCTYPE html>
   }
   .view-btn:hover { opacity: 0.85; }
 
+  .score-badge {
+    display: inline-flex; align-items: center;
+    border-radius: 999px; padding: 0.2rem 0.6rem;
+    font-size: 0.75rem; font-weight: 700; color: #fff; white-space: nowrap;
+  }
+  .score-badge.green  { background: #2ea043; }
+  .score-badge.amber  { background: #d4680a; }
+  .score-badge.red    { background: #b91c1c; }
+  .score-badge.error  { background: #57606a; font-style: italic; }
+  .score-badge[data-reason] { cursor: pointer; }
+  .match-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.75rem; cursor: pointer;
+  }
+  .match-btn:hover:not(:disabled) { background: var(--border); color: var(--text); }
+  .match-btn:disabled { opacity: 0.5; cursor: default; }
+  #score-popover {
+    display: none; position: fixed; z-index: 100;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.6rem 0.85rem;
+    font-size: 0.8rem; color: var(--text); max-width: 260px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); line-height: 1.4;
+  }
+  #score-popover.visible { display: block; }
+
   .empty-state {
     text-align: center; padding: 4rem 2rem; color: var(--muted);
   }
@@ -313,6 +340,7 @@ const HTML = `<!DOCTYPE html>
     <div class="grid" id="grid"></div>
   </main>
 </div>
+<div id="score-popover"></div>
 <div id="map-panel">
   <div class="map-toolbar">
     <button id="locateBtn">Use my location</button>
@@ -333,6 +361,106 @@ const HTML = `<!DOCTYPE html>
 
 <script>
 const SOURCE_COLORS = ${JSON.stringify(SOURCE_COLORS)};
+
+const jobScores = {};
+
+async function loadInitialScores() {
+  try {
+    const res = await fetch("/api/scores");
+    if (res.ok) {
+      const data = await res.json();
+      Object.assign(jobScores, data);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function scoreColor(n) {
+  if (n >= 70) return "green";
+  if (n >= 40) return "amber";
+  return "red";
+}
+
+function scoreBadgeHtml(score, entry) {
+  const hasDetail = entry && (entry.hardMissing || entry.preferredMissing || entry.reason);
+  const clickAttr = hasDetail ? \` onclick="showScoreDetail(this, event)"\` : "";
+  const dataAttr = hasDetail ? \` data-statekey="\${esc(entry.stateKey || "")}"\` : "";
+  return \`<span class="score-badge \${scoreColor(score)}"\${clickAttr}\${dataAttr}>\${score}/100</span>\`;
+}
+
+function renderScoreWidget(job) {
+  const key = job.stateKey;
+  if (jobScores[key] !== undefined) {
+    const entry = { ...jobScores[key], stateKey: key };
+    return scoreBadgeHtml(entry.score, entry);
+  }
+  return \`<button class="match-btn" data-statekey="\${esc(key)}" onclick="estimateMatch(this)">Estimate Match</button>\`;
+}
+
+const scorePopover = document.getElementById("score-popover");
+
+function showScoreDetail(badge, event) {
+  event.stopPropagation();
+  if (!scorePopover) return;
+  const key = badge.dataset.statekey;
+  const entry = key ? jobScores[key] : null;
+  if (!entry) return;
+
+  const lines = [];
+  if (entry.hardMissing && !/^none$/i.test(entry.hardMissing.trim())) {
+    lines.push(\`<strong>Hard reqs missing:</strong> \${esc(entry.hardMissing)}\`);
+  }
+  if (entry.preferredMissing && !/^none$/i.test(entry.preferredMissing.trim())) {
+    lines.push(\`<strong>Preferred missing:</strong> \${esc(entry.preferredMissing)}\`);
+  }
+  if (entry.reason) {
+    lines.push(\`<em>\${esc(entry.reason)}</em>\`);
+  }
+  if (lines.length === 0) return;
+
+  scorePopover.innerHTML = lines.join("<br>");
+  scorePopover.classList.add("visible");
+  const rect = badge.getBoundingClientRect();
+  const top = rect.bottom + 6 + window.scrollY;
+  const left = Math.max(0, Math.min(rect.left + window.scrollX, window.innerWidth - 280));
+  scorePopover.style.top = top + "px";
+  scorePopover.style.left = left + "px";
+}
+
+document.addEventListener("click", () => {
+  if (scorePopover) scorePopover.classList.remove("visible");
+});
+
+let scoringInFlight = false;
+
+async function estimateMatch(btn) {
+  if (scoringInFlight) return;
+  scoringInFlight = true;
+  const stateKey = btn.dataset.statekey;
+  btn.disabled = true;
+  btn.textContent = "Scoring\u2026";
+  try {
+    const res = await fetch("/api/score-job", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stateKey }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const { score, reason, hardMet, hardMissing, preferredMissing } = data;
+      jobScores[stateKey] = { score, reason, hardMet, hardMissing, preferredMissing };
+      btn.outerHTML = scoreBadgeHtml(score, { stateKey, score, reason, hardMet, hardMissing, preferredMissing });
+    } else {
+      btn.outerHTML = \`<span class="score-badge error">?</span>\`;
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = "Estimate Match";
+  } finally {
+    scoringInFlight = false;
+  }
+}
 
 function badgeColor(source) {
   return SOURCE_COLORS[source.toLowerCase()] || "#6e7681";
@@ -381,7 +509,10 @@ function renderCard(job) {
       <div class="card-meta">\${salary}\${qualifications}\${location}\${posted}</div>
       <div class="card-footer">
         <span class="alerted-text">\${alerted ? "Alerted " + esc(alerted) : ""}</span>
-        <a class="view-btn" href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>
+        <div style="display:flex;align-items:center;gap:0.5rem">
+          \${renderScoreWidget(job)}
+          <a class="view-btn" href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>
+        </div>
       </div>
     </div>
   \`;
@@ -487,7 +618,7 @@ themeToggle.addEventListener("click", () => {
   applyTheme(current === "dark" ? "light" : "dark");
 });
 
-loadPage(1);
+loadInitialScores().then(() => loadPage(1));
 
 // New-jobs polling
 const banner = document.getElementById("new-jobs-banner");
@@ -756,6 +887,72 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === "GET" && url.pathname === "/api/scores") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(getAllScores()));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/score-job") {
+    (async () => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      let stateKey: string;
+      try {
+        ({ stateKey } = JSON.parse(body) as { stateKey: string });
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON body" }));
+        return;
+      }
+
+      let config;
+      try {
+        config = loadConfig();
+      } catch {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Failed to load config" }));
+        return;
+      }
+
+      if (!config.resumePath) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "resumePath not set in config.json" }));
+        return;
+      }
+
+      const job = loadHistory().find((j) => j.stateKey === stateKey);
+      if (!job) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Job not found" }));
+        return;
+      }
+
+      try {
+        const entry = await scoreJob(job, config.resumePath, config.ollamaModel);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ stateKey, ...entry }));
+      } catch (err) {
+        if (err instanceof OllamaUnavailableError) {
+          res.writeHead(503, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        } else if (err instanceof Error && err.message.startsWith("Could not parse score")) {
+          res.writeHead(502, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: err.message }));
+        } else {
+          res.writeHead(500, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: String(err) }));
+        }
+      }
+    })().catch(err => {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(err) }));
+      }
+    });
+    return;
+  }
+
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(HTML);
@@ -768,6 +965,7 @@ const server = http.createServer((req, res) => {
 
 export function startDashboard(): void {
   loadGeocodeCache();
+  loadScores();
   server.listen(PORT, () => {
     console.log(`[dashboard] Listening on http://localhost:${PORT}`);
   });
