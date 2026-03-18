@@ -3,9 +3,16 @@ import path from "path";
 import fs from "fs";
 import { loadHistory } from "./history.js";
 import { loadConfig } from "./config.js";
+import type { Config } from "./config.js";
 import { scoreJob, loadScores, getAllScores, OllamaUnavailableError } from "./scorer.js";
 
 const PORT = parseInt(process.env.PORT ?? "3737", 10);
+
+let cachedConfig: Config | null = null;
+function getConfig(): Config {
+  if (!cachedConfig) cachedConfig = loadConfig();
+  return cachedConfig;
+}
 
 const SOURCE_COLORS: Record<string, string> = {
   greenhouse: "#2ea043",
@@ -382,18 +389,17 @@ function scoreColor(n) {
   return "red";
 }
 
-function scoreBadgeHtml(score, entry) {
-  const hasDetail = entry && (entry.hardMissing || entry.preferredMissing || entry.reason);
+function scoreBadgeHtml(entry) {
+  const hasDetail = entry.hardMissing || entry.preferredMissing || entry.reason;
   const clickAttr = hasDetail ? \` onclick="showScoreDetail(this, event)"\` : "";
-  const dataAttr = hasDetail ? \` data-statekey="\${esc(entry.stateKey || "")}"\` : "";
-  return \`<span class="score-badge \${scoreColor(score)}"\${clickAttr}\${dataAttr}>\${score}/100</span>\`;
+  const dataAttr = hasDetail ? \` data-statekey="\${esc(entry.stateKey)}"\` : "";
+  return \`<span class="score-badge \${scoreColor(entry.score)}"\${clickAttr}\${dataAttr}>\${entry.score}/100</span>\`;
 }
 
 function renderScoreWidget(job) {
   const key = job.stateKey;
   if (jobScores[key] !== undefined) {
-    const entry = { ...jobScores[key], stateKey: key };
-    return scoreBadgeHtml(entry.score, entry);
+    return scoreBadgeHtml({ ...jobScores[key], stateKey: key });
   }
   return \`<button class="match-btn" data-statekey="\${esc(key)}" onclick="estimateMatch(this)">Estimate Match</button>\`;
 }
@@ -450,7 +456,7 @@ async function estimateMatch(btn) {
       const data = await res.json();
       const { score, reason, hardMet, hardMissing, preferredMissing } = data;
       jobScores[stateKey] = { score, reason, hardMet, hardMissing, preferredMissing };
-      btn.outerHTML = scoreBadgeHtml(score, { stateKey, score, reason, hardMet, hardMissing, preferredMissing });
+      btn.outerHTML = scoreBadgeHtml({ stateKey, score, reason, hardMet, hardMissing, preferredMissing });
     } else {
       btn.outerHTML = \`<span class="score-badge error">?</span>\`;
     }
@@ -906,14 +912,7 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      let config;
-      try {
-        config = loadConfig();
-      } catch {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Failed to load config" }));
-        return;
-      }
+      const config = getConfig();
 
       if (!config.resumePath) {
         res.writeHead(400, { "Content-Type": "application/json" });
@@ -964,6 +963,7 @@ const server = http.createServer((req, res) => {
 });
 
 export function startDashboard(): void {
+  cachedConfig = loadConfig();
   loadGeocodeCache();
   loadScores();
   server.listen(PORT, () => {
