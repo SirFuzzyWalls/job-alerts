@@ -139,7 +139,8 @@ Rewrite 3: <improved bullet point>`;
       }),
     });
   } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code;
+    const code = (err as NodeJS.ErrnoException).code
+      ?? ((err as { cause?: NodeJS.ErrnoException }).cause)?.code;
     if (code === "ECONNREFUSED" || code === "ENOTFOUND") {
       throw new OllamaUnavailableError();
     }

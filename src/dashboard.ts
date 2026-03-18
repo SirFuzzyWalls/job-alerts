@@ -275,6 +275,7 @@ const HTML = `<!DOCTYPE html>
     font-size: 0.875rem; font-weight: 500;
   }
   #new-jobs-banner.visible { display: flex; }
+  #new-jobs-banner.removed { background: var(--muted); }
   #new-jobs-banner button {
     background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4);
     color: #fff; border-radius: 6px; padding: 0.25rem 0.65rem;
@@ -376,13 +377,20 @@ const HTML = `<!DOCTYPE html>
 const SOURCE_COLORS = ${JSON.stringify(SOURCE_COLORS)};
 
 const jobScores = {};
+let scoringAvailable = true;
+let scoringUnavailableReason = "";
 
 async function loadInitialScores() {
   try {
-    const res = await fetch("/api/scores");
-    if (res.ok) {
-      const data = await res.json();
-      Object.assign(jobScores, data);
+    const [scoresRes, configRes] = await Promise.all([
+      fetch("/api/scores"),
+      fetch("/api/scoring-config"),
+    ]);
+    if (scoresRes.ok) Object.assign(jobScores, await scoresRes.json());
+    if (configRes.ok) {
+      const cfg = await configRes.json();
+      scoringAvailable = cfg.available;
+      scoringUnavailableReason = cfg.reason ?? "";
     }
   } catch {
     // ignore
@@ -406,6 +414,9 @@ function renderScoreWidget(job) {
   const key = job.stateKey;
   if (jobScores[key] !== undefined) {
     return scoreBadgeHtml({ ...jobScores[key], stateKey: key });
+  }
+  if (!scoringAvailable) {
+    return \`<button class="match-btn" disabled title="\${esc(scoringUnavailableReason)}">Estimate Match</button>\`;
   }
   return \`<button class="match-btn" data-statekey="\${esc(key)}" onclick="estimateMatch(this)">Estimate Match</button>\`;
 }
@@ -462,6 +473,10 @@ async function estimateMatch(btn) {
       const { score, reason, missingKeywords, rewrites } = data;
       jobScores[stateKey] = { score, reason, missingKeywords, rewrites };
       btn.outerHTML = scoreBadgeHtml({ stateKey, score, reason, missingKeywords, rewrites });
+    } else if (res.status === 503) {
+      btn.disabled = false;
+      btn.textContent = "Estimate Match";
+      btn.title = "Ollama is not reachable — is it running?";
     } else {
       btn.outerHTML = \`<span class="score-badge error">?</span>\`;
     }
@@ -645,6 +660,12 @@ async function checkForNewJobs() {
     if (total > totalJobs && totalJobs > 0) {
       const diff = total - totalJobs;
       bannerText.textContent = \`\${diff} new job\${diff === 1 ? "" : "s"} available since you last loaded.\`;
+      banner.classList.remove("removed");
+      banner.classList.add("visible");
+    } else if (total < totalJobs && totalJobs > 0) {
+      const diff = totalJobs - total;
+      bannerText.textContent = \`\${diff} job\${diff === 1 ? "" : "s"} removed from boards since you last loaded.\`;
+      banner.classList.add("removed");
       banner.classList.add("visible");
     }
   } catch {
@@ -653,13 +674,13 @@ async function checkForNewJobs() {
 }
 
 bannerRefresh.addEventListener("click", () => {
-  banner.classList.remove("visible");
+  banner.classList.remove("visible", "removed");
   currentPage = 1;
   loadPage(1);
 });
 
 bannerDismiss.addEventListener("click", async () => {
-  banner.classList.remove("visible");
+  banner.classList.remove("visible", "removed");
   // Advance baseline so re-alerts only fire for future additions
   try {
     const res = await fetch("/api/count");
@@ -901,6 +922,19 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && url.pathname === "/api/scores") {
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(getAllScores()));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/scoring-config") {
+    const config = getConfig();
+    const missing: string[] = [];
+    if (!config.resumePath) missing.push("resumePath");
+    if (!config.ollamaModel) missing.push("ollamaModel");
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({
+      available: missing.length === 0,
+      reason: missing.length > 0 ? `Set ${missing.join(" and ")} in config.json to enable AI scoring` : null,
+    }));
     return;
   }
 
