@@ -163,6 +163,7 @@ async function _runCheck(): Promise<void> {
   );
 
   if (scoreMode && config.resumePath) {
+    loadScores();
     console.log(`[check] Scoring ${newMatches.length} new job(s)…`);
     for (const job of newMatches) {
       try {
@@ -184,8 +185,6 @@ async function main(): Promise<void> {
     await runDryRun();
     return;
   }
-
-  if (scoreMode) loadScores();
 
   if (dashboardMode) {
     const { startDashboard } = await import("./dashboard.js");

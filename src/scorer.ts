@@ -24,20 +24,18 @@ export class OllamaUnavailableError extends Error {
 
 export function loadScores(): void {
   try {
-    if (fs.existsSync(SCORES_FILE)) {
-      const data = JSON.parse(fs.readFileSync(SCORES_FILE, "utf8")) as Record<string, ScoreEntry | number>;
-      for (const [k, v] of Object.entries(data)) {
-        // backward compat: old files stored plain numbers
-        if (typeof v === "number") {
-          scoreCache.set(k, { score: v, reason: "" });
-        } else {
-          scoreCache.set(k, v);
-        }
+    const data = JSON.parse(fs.readFileSync(SCORES_FILE, "utf8")) as Record<string, ScoreEntry | number>;
+    for (const [k, v] of Object.entries(data)) {
+      // backward compat: old files stored plain numbers
+      if (typeof v === "number") {
+        scoreCache.set(k, { score: v, reason: "" });
+      } else {
+        scoreCache.set(k, v);
       }
-      console.log(`[scorer] Loaded ${scoreCache.size} cached match scores`);
     }
+    console.log(`[scorer] Loaded ${scoreCache.size} cached match scores`);
   } catch {
-    // ignore corrupt cache
+    // ignore missing or corrupt cache
   }
 }
 

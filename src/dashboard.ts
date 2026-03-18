@@ -229,7 +229,7 @@ const HTML = `<!DOCTYPE html>
   .score-badge.amber  { background: #d4680a; }
   .score-badge.red    { background: #b91c1c; }
   .score-badge.error  { background: #57606a; font-style: italic; }
-  .score-badge[data-reason] { cursor: pointer; }
+  .score-badge[data-statekey] { cursor: pointer; }
   .match-btn {
     background: none; border: 1px solid var(--border); color: var(--muted);
     border-radius: 6px; padding: 0.35rem 0.65rem; font-size: 0.75rem; cursor: pointer;
