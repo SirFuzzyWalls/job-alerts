@@ -8,6 +8,24 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 
 ---
 
+## Versioning Strategy
+
+Releases follow [Semantic Versioning](https://semver.org/):
+
+- **Patch (x.x.Z):** Bug fixes, dependency updates, minor copy changes
+- **Minor (x.Y.0):** A completed roadmap phase or notable feature addition
+- **Major (X.0.0):** Architectural overhaul or breaking change to config/data formats
+
+---
+
+## Released Versions
+
+| Version | Date | Notes |
+|---------|------|-------|
+| v1.0.0 | 2026-03-19 | MVP complete; Phase 1 (Power Search) shipped |
+
+---
+
 ## Current State (Baseline)
 
 **What works:**
@@ -18,11 +36,6 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 - AI match scoring (Ollama, on-demand or auto on check)
 - First-run seeding (no email flood)
 
-
-**Known Bugs:**
-- *resolved* Posted date and alerted date can get out of sync, I suspect this is due to local state changes during development
-- *resolved* Map view of dashboard has some interesting timing issues: "Posted Posted Today" 
-- ?????
 ---
 
 ## MVP Gaps ✅ All closed
@@ -40,7 +53,7 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 
 ## Roadmap
 
-### Phase 1 — Power Search ✅ Complete
+### Phase 1 — Power Search ✅ Complete → v1.0.0
 
 **Theme:** Make the dashboard useful for active job hunting, not just passive review.
 
@@ -70,7 +83,7 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 
 ---
 
-### Phase 2 — Smarter Alerts (not started)
+### Phase 2 — Smarter Alerts (not started) → v1.1.0
 
 **Theme:** Reduce noise, increase signal in what gets emailed.
 
@@ -100,7 +113,7 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 
 ---
 
-### Phase 3 — Setup & Reliability (not started)
+### Phase 3 — Setup & Reliability (not started) → v1.2.0
 
 **Theme:** Reduce friction for setup, and make the tool trustworthy over weeks of use.
 
@@ -128,6 +141,13 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 - `validate-boards` parallelism configurable (current: 5 workers)
 - Boards.json gets a `disabled: true` flag to skip without removing
 - **Files:** `scripts/probe.ts`, `scripts/validate-boards.ts`, `src/registry.ts`
+
+---
+
+## Bug History
+
+- *resolved* Posted date and alerted date could get out of sync due to local state changes during development
+- *resolved* Map view showed "Posted Posted Today" due to a date formatting timing issue; fixed by converting to ISO at fetch time
 
 ---
 
