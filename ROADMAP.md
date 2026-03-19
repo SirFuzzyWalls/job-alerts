@@ -2,7 +2,7 @@
 
 ## Context
 
-job-alerts is a personal job-hunting automation tool. It scrapes 7 ATS platforms (Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News), filters against configurable criteria, emails digests, and provides a local dashboard with geolocation and AI match scoring.
+job-alerts is a personal job-hunting automation tool. It scrapes 6 ATS platforms (Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News), filters against configurable criteria, emails digests, and provides a local dashboard with geolocation and AI match scoring.
 
 The tool is intended for a single-user, self-hosted use case. The roadmap below is scoped as such no multi user, no cloud deployments, no database migration. The number one goal is to keep user data private, and secondly to keep dependencies and costs as close to zero as possible.
 

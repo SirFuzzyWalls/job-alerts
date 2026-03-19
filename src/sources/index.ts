@@ -39,7 +39,7 @@ export async function fetchAllJobs(config: Config): Promise<Job[]> {
         break;
       case "workday":
         tasks.push({
-          label: `workday:${company.subdomain ?? company.company}`,
+          label: `workday:${company.company ?? company.subdomain}`,
           fn: () =>
             fetchWorkday({
               company: company.company,
