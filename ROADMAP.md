@@ -2,9 +2,9 @@
 
 ## Context
 
-job-alerts is a personal job-hunting automation tool. It scrapes 7 ATS platforms (Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News, Ashby), filters against configurable criteria, emails digests, and provides a local dashboard with geolocation and AI match scoring.
+job-alerts is a personal job-hunting automation tool. It scrapes 7 ATS platforms (Greenhouse, Lever, Ashby, Workday, USAJobs, Hacker News), filters against configurable criteria, emails digests, and provides a local dashboard with geolocation and AI match scoring.
 
-The tool is well-architected for a single-user, self-hosted use case. The roadmap below is scoped to that persona — no multi-tenancy, no cloud deployment, no database migration. The goal is to make it the best possible personal job-search copilot.
+The tool is intended for a single-user, self-hosted use case. The roadmap below is scoped as such no multi user, no cloud deployments, no database migration. The number one goal is to keep user data private, and secondly to keep dependencies and costs as close to zero as possible.
 
 ---
 
@@ -18,6 +18,11 @@ The tool is well-architected for a single-user, self-hosted use case. The roadma
 - AI match scoring (Ollama, on-demand or auto on check)
 - First-run seeding (no email flood)
 
+
+**Known Bugs:**
+- Posted date and alerted date can get out of sync, I suspect this is due to local state changes during development
+- Map view of dashboard has some interesting timing issues: "Posted Posted Today" 
+- ?????
 ---
 
 ## MVP Gaps ✅ All closed
@@ -131,19 +136,19 @@ The tool is well-architected for a single-user, self-hosted use case. The roadma
 | Feature | Reason |
 |---------|--------|
 | Multi-user / auth | Personal tool; adds significant complexity with no personal benefit |
-| Cloud hosting / containerization | Self-hosted is a feature, not a bug |
-| Database migration | 140 records in JSON is fast; cross that bridge at 50K+ |
+| Cloud hosting / containerization | Self-hosted is the absolute goal |
+| Database  | 140 records in JSON is fast enough, time will tell if a more robust DB is needed |
 | Mobile app | Browser is sufficient; responsive CSS handles small screens |
 | Resume builder / editor | Out of scope; resume lives in a file |
-| LinkedIn / Indeed scraping | TOS risk; not worth it |
-| Interview prep / coaching | Different product |
+| LinkedIn / Indeed scraping | TOS risk, other tools exist to do this well |
+| Interview prep / coaching | A task handled better by real humans |
 | Custom LLM hosting | Ollama already handles this |
 
 ---
 
 ## Success Metrics (Personal Tool)
 
-- **Time to first alert after setup:** < 10 minutes
+- **Time to first alert after setup:** - Depends on time of day user sets up the tool
 - **False positive rate:** < 20% of emailed jobs are irrelevant (measured by tracking "Ignored" status)
 - **Score correlation:** Jobs scored 70+ have > 60% "Applied" rate (vs. < 30% for jobs scored below 50)
 - **Dashboard weekly active use:** Tool opened and used at least 3x/week during active job search
