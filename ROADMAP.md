@@ -20,8 +20,8 @@ The tool is intended for a single-user, self-hosted use case. The roadmap below 
 
 
 **Known Bugs:**
-- Posted date and alerted date can get out of sync, I suspect this is due to local state changes during development
-- Map view of dashboard has some interesting timing issues: "Posted Posted Today" 
+- *resolved* Posted date and alerted date can get out of sync, I suspect this is due to local state changes during development
+- *resolved* Map view of dashboard has some interesting timing issues: "Posted Posted Today" 
 - ?????
 ---
 

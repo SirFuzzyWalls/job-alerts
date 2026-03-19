@@ -16,6 +16,29 @@ interface WorkdayJobPosting {
   bulletFields?: string[];
 }
 
+function parseWorkdayPostedOn(str: string | undefined): string | undefined {
+  if (!str) return undefined;
+  const now = new Date();
+  const ymd = (d: Date) => d.toISOString().slice(0, 10);
+  const sub = (days: number) => {
+    const d = new Date(now);
+    d.setDate(d.getDate() - days);
+    return ymd(d);
+  };
+
+  const s = str.trim();
+  if (/^posted today$/i.test(s)) return ymd(now);
+  if (/^posted yesterday$/i.test(s)) return sub(1);
+
+  const daysMatch = s.match(/^posted (\d+)\+? days? ago$/i);
+  if (daysMatch) return sub(parseInt(daysMatch[1], 10));
+
+  const monthsMatch = s.match(/^posted (\d+)\+? months? ago$/i);
+  if (monthsMatch) return sub(parseInt(monthsMatch[1], 10) * 30);
+
+  return undefined;
+}
+
 export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
   const { company, careerSite, subdomain, baseUrl: cfgBaseUrl } = cfg;
   const baseUrl = cfgBaseUrl ?? `https://${company}.${subdomain}.myworkdayjobs.com`;
@@ -89,7 +112,7 @@ export async function fetchWorkday(cfg: WorkdayCompanyConfig): Promise<Job[]> {
       url: jobUrl,
       source: "Workday",
       location: p.locationsText,
-      postedAt: p.postedOn,
+      postedAt: parseWorkdayPostedOn(p.postedOn),
       salary,
       salaryMin,
       salaryMax,

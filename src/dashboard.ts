@@ -1123,8 +1123,9 @@ async function initMap() {
     }
 
     for (const job of jobs) {
-      const timeStr = relativePostedAt(job.postedAt)
-        ? "Posted " + relativePostedAt(job.postedAt)
+      const postedTime = relativePostedAt(job.postedAt);
+      const timeStr = postedTime
+        ? (postedTime.startsWith("Posted ") ? postedTime : "Posted " + postedTime)
         : job.sentAt ? "Seen " + relativeTime(job.sentAt) : null;
       const parts = [
         \`<strong>\${esc(job.title)}</strong>\`,
