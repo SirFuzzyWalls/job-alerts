@@ -138,14 +138,6 @@
     "subdomain": "wd1"
   },
   {
-    "id": "northrop-grumman",
-    "name": "Northrop Grumman",
-    "source": "workday",
-    "company": "ngc",
-    "careerSite": "Northrop_Grumman_External_Site",
-    "subdomain": "wd1"
-  },
-  {
     "id": "rtx",
     "name": "RTX (Raytheon Technologies)",
     "source": "workday",

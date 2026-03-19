@@ -6,7 +6,7 @@ import { fetchLever } from "./lever.js";
 import { fetchAshby } from "./ashby.js";
 import { fetchWorkday } from "./workday.js";
 import { fetchHackerNews } from "./hackernews.js";
-import { allSettledConcurrent } from "../utils.js";
+import { allSettledConcurrent, decodeHtmlEntities } from "../utils.js";
 
 export type { Job };
 
@@ -67,5 +67,5 @@ export async function fetchAllJobs(config: Config): Promise<Job[]> {
     }
   }
 
-  return jobs;
+  return jobs.map(j => ({ ...j, title: decodeHtmlEntities(j.title) }));
 }

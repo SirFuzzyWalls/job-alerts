@@ -137,6 +137,7 @@ Rewrite 3: <improved bullet point>`;
         stream: false,
         options: { temperature: 0.1 },
       }),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code

@@ -10,6 +10,7 @@
     "dry-run": "tsx src/index.ts --dry-run",
     "probe": "tsx scripts/probe.ts",
     "validate-boards": "tsx scripts/validate-boards.ts",
+    "validate-config": "tsx src/index.ts --validate-config",
     "dashboard": "tsx src/dashboard.ts"
   },
   "dependencies": {

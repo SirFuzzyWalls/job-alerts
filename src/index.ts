@@ -1,4 +1,6 @@
 import cron from "node-cron";
+import fs from "fs";
+import path from "path";
 import { loadConfig } from "./config.js";
 import type { Config } from "./config.js";
 import { fetchAllJobs } from "./sources/index.js";
@@ -14,6 +16,7 @@ const onceMode = process.argv.includes("--once");
 const dryRunMode = process.argv.includes("--dry-run");
 const dashboardMode = process.argv.includes("--dashboard");
 const scoreMode = process.argv.includes("--score") || process.env.npm_config_score === "true";
+const validateConfigMode = process.argv.includes("--validate-config");
 
 
 function applyFilters(jobs: Job[], config: Config): Job[] {
@@ -181,6 +184,28 @@ async function _runCheck(): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (validateConfigMode) {
+    try {
+      const config = loadConfig();
+      console.log(`[validate-config] OK — ${config.companies?.length ?? 0} company source(s), ${config.jobTitles.length} title filter(s).`);
+      if (config.resumePath) {
+        const resolved = path.resolve(process.cwd(), config.resumePath);
+        if (!fs.existsSync(resolved)) {
+          console.warn(`[validate-config] WARNING: resumePath "${config.resumePath}" not found at ${resolved}`);
+        } else {
+          console.log(`[validate-config] resumePath OK: ${resolved}`);
+        }
+      }
+      if (config.ollamaModel) {
+        console.log(`[validate-config] ollamaModel: ${config.ollamaModel}`);
+      }
+      process.exit(0);
+    } catch (err) {
+      console.error(`[validate-config] FAILED: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  }
+
   if (dryRunMode) {
     await runDryRun();
     return;

@@ -5,6 +5,12 @@ import { writeFileAtomic } from "./utils.js";
 
 export type JobRecord = Job & { sentAt: number };
 
+let changeListener: (() => void) | null = null;
+
+export function setHistoryChangeListener(cb: () => void): void {
+  changeListener = cb;
+}
+
 const HISTORY_FILE = path.join(process.cwd(), "job_history.json");
 
 export function loadHistory(): JobRecord[] {
@@ -31,11 +37,13 @@ export function appendToHistory(jobs: Job[], sentAt: number = Date.now(), retent
   const updated = [...existing, ...newRecords];
   console.log(`[history] Appended ${newRecords.length} record(s) (total: ${updated.length})`);
   writeFileAtomic(HISTORY_FILE, JSON.stringify(updated, null, 2));
+  changeListener?.();
 }
 
 export function removeFromHistory(stateKeys: Set<string>): void {
   const records = loadHistory().filter((r) => !stateKeys.has(r.stateKey));
   writeFileAtomic(HISTORY_FILE, JSON.stringify(records, null, 2));
+  changeListener?.();
 }
 
 export function pruneHistory(records: JobRecord[], retentionDays: number): JobRecord[] {

@@ -1,10 +1,12 @@
 import http from "http";
 import path from "path";
 import fs from "fs";
-import { loadHistory } from "./history.js";
+import { loadHistory, setHistoryChangeListener } from "./history.js";
 import { loadConfig } from "./config.js";
 import type { Config } from "./config.js";
 import { scoreJob, loadScores, getAllScores, OllamaUnavailableError } from "./scorer.js";
+import { getAllApplications, setApplication, loadApplications } from "./applications.js";
+import type { ApplicationStatus } from "./applications.js";
 
 const PORT = parseInt(process.env.PORT ?? "3737", 10);
 
@@ -31,6 +33,43 @@ const SOURCE_COLORS: Record<string, string> = {
 
 function getBadgeColor(source: string): string {
   return SOURCE_COLORS[source.toLowerCase()] ?? "#6e7681";
+}
+
+// --- Bulk scoring state ---
+
+interface BulkScoreState {
+  total: number;
+  scored: number;
+  done: boolean;
+  errors: number;
+}
+let bulkScoreState: BulkScoreState | null = null;
+let bulkScoreRunning = false;
+
+async function startBulkScore(config: Config): Promise<void> {
+  if (bulkScoreRunning || !config.resumePath) return;
+  bulkScoreRunning = true;
+  const history = getCachedHistory();
+  const scores = getAllScores();
+  const unscored = history.filter(j => !scores[j.stateKey]);
+  bulkScoreState = { total: unscored.length, scored: 0, done: false, errors: 0 };
+
+  (async () => {
+    for (const job of unscored) {
+      try {
+        await scoreJob(job, config.resumePath!, config.ollamaModel);
+        bulkScoreState!.scored++;
+      } catch (err) {
+        if (err instanceof OllamaUnavailableError) break;
+        bulkScoreState!.errors++;
+      }
+    }
+    bulkScoreState!.done = true;
+    bulkScoreRunning = false;
+  })().catch(() => {
+    if (bulkScoreState) bulkScoreState.done = true;
+    bulkScoreRunning = false;
+  });
 }
 
 // --- Geocoding ---
@@ -157,14 +196,16 @@ const HTML = `<!DOCTYPE html>
     position: sticky; top: 0; z-index: 10;
     background: var(--surface); border-bottom: 1px solid var(--border);
     padding: 0.75rem 1.5rem;
-    display: flex; align-items: center; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
   }
   header h1 { font-size: 1.125rem; font-weight: 600; }
-  .theme-btn {
+  .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .theme-btn, .export-btn {
     background: none; border: 1px solid var(--border); color: var(--text);
     border-radius: 6px; padding: 0.35rem 0.75rem; cursor: pointer; font-size: 0.875rem;
+    text-decoration: none; display: inline-block;
   }
-  .theme-btn:hover { background: var(--border); }
+  .theme-btn:hover, .export-btn:hover { background: var(--border); }
 
   /* Tabs */
   .tab-bar { display: flex; gap: 0.25rem; }
@@ -188,6 +229,34 @@ const HTML = `<!DOCTYPE html>
     background: var(--card); color: var(--text); border: 1px solid var(--border);
     border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.875rem; cursor: pointer;
   }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+    padding: 0.6rem 1.5rem;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  .search-input {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.3rem 0.65rem; font-size: 0.875rem; outline: none;
+    min-width: 200px; flex: 1;
+  }
+  .search-input:focus { border-color: var(--accent); }
+  .filter-bar label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+  .filter-bar select { font-size: 0.8rem; }
+  .clear-filters-btn {
+    background: none; border: 1px solid var(--border); color: var(--muted);
+    border-radius: 6px; padding: 0.25rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+    white-space: nowrap;
+  }
+  .clear-filters-btn:hover { background: var(--border); color: var(--text); }
+  input[type="range"] { accent-color: var(--accent); cursor: pointer; }
+  .score-threshold-label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+  input[type="date"] {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.3rem 0.5rem; font-size: 0.8rem; cursor: pointer;
+  }
+
   .pagination { display: flex; align-items: center; gap: 0.5rem; margin-left: auto; }
   .page-info { font-size: 0.875rem; color: var(--muted); white-space: nowrap; }
   .page-btn {
@@ -196,6 +265,17 @@ const HTML = `<!DOCTYPE html>
   }
   .page-btn:hover:not(:disabled) { background: var(--accent); color: #fff; border-color: var(--accent); }
   .page-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Bulk score controls */
+  .bulk-score-area { display: flex; align-items: center; gap: 0.5rem; }
+  .bulk-score-btn {
+    background: none; border: 1px solid var(--border); color: var(--text);
+    border-radius: 6px; padding: 0.3rem 0.65rem; cursor: pointer; font-size: 0.875rem;
+    white-space: nowrap;
+  }
+  .bulk-score-btn:hover:not(:disabled) { background: var(--border); }
+  .bulk-score-btn:disabled { opacity: 0.5; cursor: default; }
+  .bulk-progress { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
 
   main { padding: 1.5rem; }
   .grid {
@@ -224,14 +304,20 @@ const HTML = `<!DOCTYPE html>
   .card-meta { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.8rem; color: var(--muted); }
   .meta-item { display: flex; align-items: center; gap: 0.25rem; }
 
-  .card-footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+  .card-footer { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding-top: 0.5rem; border-top: 1px solid var(--border); gap: 0.5rem; flex-wrap: wrap; }
   .alerted-text { font-size: 0.75rem; color: var(--muted); }
+  .card-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
   .view-btn {
     background: var(--accent); color: #fff; border: none; border-radius: 6px;
     padding: 0.4rem 0.8rem; font-size: 0.8rem; font-weight: 500; cursor: pointer;
     text-decoration: none; display: inline-block;
   }
   .view-btn:hover { opacity: 0.85; }
+
+  .status-select {
+    background: var(--card); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.25rem 0.4rem; font-size: 0.75rem; cursor: pointer;
+  }
 
   .score-badge {
     display: inline-flex; align-items: center;
@@ -313,9 +399,47 @@ const HTML = `<!DOCTYPE html>
     <button class="tab-btn active" id="tabJobs">Jobs</button>
     <button class="tab-btn" id="tabMap">Map</button>
   </div>
-  <button class="theme-btn" id="themeToggle">Toggle theme</button>
+  <div class="header-actions">
+    <a class="export-btn" href="/api/export.csv" download="jobs.csv">Export CSV</a>
+    <button class="theme-btn" id="themeToggle">Toggle theme</button>
+  </div>
 </header>
 <div id="jobs-panel">
+  <div class="filter-bar">
+    <input type="search" class="search-input" id="searchInput" placeholder="Search jobs, companies, locations&hellip;">
+    <label>Source:
+      <select id="sourceFilter">
+        <option value="">All sources</option>
+        <option value="greenhouse">Greenhouse</option>
+        <option value="lever">Lever</option>
+        <option value="ashby">Ashby</option>
+        <option value="workday">Workday</option>
+        <option value="usajobs">USAJobs</option>
+        <option value="hacker news">Hacker News</option>
+      </select>
+    </label>
+    <label>Status:
+      <select id="statusFilter">
+        <option value="">All statuses</option>
+        <option value="none">No status</option>
+        <option value="interested">Interested</option>
+        <option value="applied">Applied</option>
+        <option value="interview">Interview</option>
+        <option value="offer">Offer</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </label>
+    <label style="display:flex;align-items:center;gap:0.35rem">
+      <input type="checkbox" id="hasScoreFilter"> Has score
+    </label>
+    <label class="score-threshold-label">
+      Min score: <span id="minScoreVal">0</span>
+      <input type="range" id="minScoreRange" min="0" max="100" step="5" value="0" style="width:80px;margin-left:0.35rem">
+    </label>
+    <label>From: <input type="date" id="dateFrom"></label>
+    <label>To: <input type="date" id="dateTo"></label>
+    <button class="clear-filters-btn" id="clearFilters">Clear filters</button>
+  </div>
   <div class="controls">
     <label>
       Per page:
@@ -336,6 +460,10 @@ const HTML = `<!DOCTYPE html>
     <label>
       <input type="checkbox" id="salaryOnly"> Salary only
     </label>
+    <div class="bulk-score-area">
+      <button class="bulk-score-btn" id="bulkScoreBtn">Score all unscored</button>
+      <span class="bulk-progress" id="bulkProgress"></span>
+    </div>
     <div class="pagination">
       <span class="page-info" id="pageInfo">—</span>
       <button class="page-btn" id="prevBtn" disabled>&#8592; Prev</button>
@@ -376,21 +504,51 @@ const HTML = `<!DOCTYPE html>
 <script>
 const SOURCE_COLORS = ${JSON.stringify(SOURCE_COLORS)};
 
+const STATUS_COLORS = {
+  none: "#6e7681",
+  interested: "#1f6feb",
+  applied: "#2ea043",
+  interview: "#8957e5",
+  offer: "#d4680a",
+  rejected: "#b91c1c",
+};
+const STATUS_LABELS = {
+  none: "—",
+  interested: "Interested",
+  applied: "Applied",
+  interview: "Interview",
+  offer: "Offer",
+  rejected: "Rejected",
+};
+const STATUS_OPTIONS = ["none", "interested", "applied", "interview", "offer", "rejected"];
+
 const jobScores = {};
+const appStatuses = {};
 let scoringAvailable = true;
 let scoringUnavailableReason = "";
 
-async function loadInitialScores() {
+async function loadInitialData() {
   try {
-    const [scoresRes, configRes] = await Promise.all([
+    const [scoresRes, configRes, appsRes, countRes] = await Promise.all([
       fetch("/api/scores"),
       fetch("/api/scoring-config"),
+      fetch("/api/application-status"),
+      fetch("/api/count"),
     ]);
     if (scoresRes.ok) Object.assign(jobScores, await scoresRes.json());
     if (configRes.ok) {
       const cfg = await configRes.json();
       scoringAvailable = cfg.available;
       scoringUnavailableReason = cfg.reason ?? "";
+    }
+    if (appsRes.ok) {
+      const data = await appsRes.json();
+      for (const [k, v] of Object.entries(data)) {
+        appStatuses[k] = v.status;
+      }
+    }
+    if (countRes.ok) {
+      ({ total: totalJobs } = await countRes.json());
     }
   } catch {
     // ignore
@@ -419,6 +577,27 @@ function renderScoreWidget(job) {
     return \`<button class="match-btn" disabled title="\${esc(scoringUnavailableReason)}">Estimate Match</button>\`;
   }
   return \`<button class="match-btn" data-statekey="\${esc(key)}" onclick="estimateMatch(this)">Estimate Match</button>\`;
+}
+
+function renderStatusSelect(job) {
+  const status = appStatuses[job.stateKey] || "none";
+  const opts = STATUS_OPTIONS.map(s =>
+    \`<option value="\${s}"\${s === status ? " selected" : ""}>\${STATUS_LABELS[s]}</option>\`
+  ).join("");
+  return \`<select class="status-select" data-statekey="\${esc(job.stateKey)}" onchange="updateStatus(this)" style="border-color:\${STATUS_COLORS[status]};color:\${STATUS_COLORS[status]}">\${opts}</select>\`;
+}
+
+async function updateStatus(select) {
+  const stateKey = select.dataset.statekey;
+  const status = select.value;
+  appStatuses[stateKey] = status;
+  select.style.borderColor = STATUS_COLORS[status];
+  select.style.color = STATUS_COLORS[status];
+  await fetch("/api/application-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ stateKey, status }),
+  }).catch(() => {});
 }
 
 const scorePopover = document.getElementById("score-popover");
@@ -488,6 +667,51 @@ async function estimateMatch(btn) {
   }
 }
 
+// --- Bulk scoring ---
+
+let bulkPollInterval = null;
+
+async function startBulkScore() {
+  const btn = document.getElementById("bulkScoreBtn");
+  const prog = document.getElementById("bulkProgress");
+  btn.disabled = true;
+  prog.textContent = "Starting\u2026";
+  try {
+    const res = await fetch("/api/score-all/start", { method: "POST" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      prog.textContent = data.error || "Failed to start";
+      btn.disabled = false;
+      return;
+    }
+  } catch {
+    prog.textContent = "Error";
+    btn.disabled = false;
+    return;
+  }
+
+  bulkPollInterval = setInterval(async () => {
+    try {
+      const res = await fetch("/api/score-all/status");
+      if (!res.ok) return;
+      const data = await res.json();
+      prog.textContent = \`\${data.scored}/\${data.total} scored\${data.errors > 0 ? " (" + data.errors + " errors)" : ""}\`;
+      if (data.done) {
+        clearInterval(bulkPollInterval);
+        bulkPollInterval = null;
+        btn.disabled = false;
+        prog.textContent = \`Done — \${data.scored}/\${data.total}\`;
+        // refresh scores and reload page
+        const scoresRes = await fetch("/api/scores");
+        if (scoresRes.ok) Object.assign(jobScores, await scoresRes.json());
+        loadPage(currentPage);
+      }
+    } catch {}
+  }, 2000);
+}
+
+document.getElementById("bulkScoreBtn").addEventListener("click", startBulkScore);
+
 function badgeColor(source) {
   return SOURCE_COLORS[source.toLowerCase()] || "#6e7681";
 }
@@ -535,7 +759,8 @@ function renderCard(job) {
       <div class="card-meta">\${salary}\${qualifications}\${location}\${posted}</div>
       <div class="card-footer">
         <span class="alerted-text">\${alerted ? "Alerted " + esc(alerted) : ""}</span>
-        <div style="display:flex;align-items:center;gap:0.5rem">
+        <div class="card-actions">
+          \${renderStatusSelect(job)}
           \${renderScoreWidget(job)}
           <a class="view-btn" href="\${esc(job.url)}" target="_blank" rel="noopener">View Job &rarr;</a>
         </div>
@@ -548,6 +773,15 @@ let currentPage = 1;
 let currentPageSize = parseInt(localStorage.getItem("pageSize") || "10", 10);
 let currentSort = localStorage.getItem("sort") || "newest";
 let currentSalaryOnly = localStorage.getItem("salaryOnly") === "1";
+let currentSearch = localStorage.getItem("search") || "";
+let currentSource = localStorage.getItem("sourceFilter") || "";
+let currentStatus = localStorage.getItem("statusFilter") || "";
+let currentHasScore = localStorage.getItem("hasScore") === "1";
+let currentMinScore = parseInt(localStorage.getItem("minScore") || "0", 10);
+let currentDateFrom = localStorage.getItem("dateFrom") || "";
+let currentDateTo = localStorage.getItem("dateTo") || "";
+// Tracks unfiltered total from /api/count — used only for new-job polling baseline.
+// Never set from data.total in loadPage (which reflects active filters).
 let totalJobs = 0;
 
 const grid = document.getElementById("grid");
@@ -557,11 +791,27 @@ const nextBtn = document.getElementById("nextBtn");
 const pageSizeSelect = document.getElementById("pageSizeSelect");
 const statusEl = document.getElementById("status");
 
+// Restore filter UI state
 pageSizeSelect.value = String(currentPageSize);
+document.getElementById("searchInput").value = currentSearch;
+document.getElementById("sourceFilter").value = currentSource;
+document.getElementById("statusFilter").value = currentStatus;
+document.getElementById("hasScoreFilter").checked = currentHasScore;
+document.getElementById("minScoreRange").value = String(currentMinScore);
+document.getElementById("minScoreVal").textContent = String(currentMinScore);
+if (currentDateFrom) document.getElementById("dateFrom").value = currentDateFrom;
+if (currentDateTo) document.getElementById("dateTo").value = currentDateTo;
 
 async function fetchJobs(page, pageSize) {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), sort: currentSort });
   if (currentSalaryOnly) params.set("salaryOnly", "1");
+  if (currentSearch) params.set("search", currentSearch);
+  if (currentSource) params.set("source", currentSource);
+  if (currentStatus) params.set("status", currentStatus);
+  if (currentHasScore) params.set("hasScore", "1");
+  if (currentMinScore > 0) params.set("minScore", String(currentMinScore));
+  if (currentDateFrom) params.set("dateFrom", currentDateFrom);
+  if (currentDateTo) params.set("dateTo", currentDateTo);
   const res = await fetch(\`/api/jobs?\${params}\`);
   if (!res.ok) throw new Error("API error: " + res.status);
   return res.json();
@@ -572,7 +822,6 @@ async function loadPage(page) {
   grid.innerHTML = "";
   try {
     const data = await fetchJobs(page, currentPageSize);
-    totalJobs = data.total;
     currentPage = data.page;
     statusEl.textContent = "";
 
@@ -628,6 +877,83 @@ salaryOnlyCheck.addEventListener("change", () => {
   loadPage(1);
 });
 
+// --- Filter handlers ---
+
+let searchTimer = null;
+document.getElementById("searchInput").addEventListener("input", e => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentSearch = e.target.value.trim();
+    localStorage.setItem("search", currentSearch);
+    currentPage = 1;
+    loadPage(1);
+  }, 300);
+});
+
+document.getElementById("sourceFilter").addEventListener("change", e => {
+  currentSource = e.target.value;
+  localStorage.setItem("sourceFilter", currentSource);
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("statusFilter").addEventListener("change", e => {
+  currentStatus = e.target.value;
+  localStorage.setItem("statusFilter", currentStatus);
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("hasScoreFilter").addEventListener("change", e => {
+  currentHasScore = e.target.checked;
+  localStorage.setItem("hasScore", currentHasScore ? "1" : "0");
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("minScoreRange").addEventListener("input", e => {
+  currentMinScore = parseInt(e.target.value, 10);
+  document.getElementById("minScoreVal").textContent = String(currentMinScore);
+  localStorage.setItem("minScore", String(currentMinScore));
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("dateFrom").addEventListener("change", e => {
+  currentDateFrom = e.target.value;
+  localStorage.setItem("dateFrom", currentDateFrom);
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("dateTo").addEventListener("change", e => {
+  currentDateTo = e.target.value;
+  localStorage.setItem("dateTo", currentDateTo);
+  currentPage = 1;
+  loadPage(1);
+});
+
+document.getElementById("clearFilters").addEventListener("click", () => {
+  currentSearch = "";
+  currentSource = "";
+  currentStatus = "";
+  currentHasScore = false;
+  currentMinScore = 0;
+  currentDateFrom = "";
+  currentDateTo = "";
+  document.getElementById("searchInput").value = "";
+  document.getElementById("sourceFilter").value = "";
+  document.getElementById("statusFilter").value = "";
+  document.getElementById("hasScoreFilter").checked = false;
+  document.getElementById("minScoreRange").value = "0";
+  document.getElementById("minScoreVal").textContent = "0";
+  document.getElementById("dateFrom").value = "";
+  document.getElementById("dateTo").value = "";
+  ["search","sourceFilter","statusFilter","hasScore","minScore","dateFrom","dateTo"].forEach(k => localStorage.removeItem(k));
+  currentPage = 1;
+  loadPage(1);
+});
+
 // Theme
 const themeToggle = document.getElementById("themeToggle");
 function getSystemTheme() {
@@ -644,7 +970,7 @@ themeToggle.addEventListener("click", () => {
   applyTheme(current === "dark" ? "light" : "dark");
 });
 
-loadInitialScores().then(() => loadPage(1));
+loadInitialData().then(() => loadPage(1));
 
 // New-jobs polling
 const banner = document.getElementById("new-jobs-banner");
@@ -662,20 +988,26 @@ async function checkForNewJobs() {
       bannerText.textContent = \`\${diff} new job\${diff === 1 ? "" : "s"} available since you last loaded.\`;
       banner.classList.remove("removed");
       banner.classList.add("visible");
+      totalJobs = total;
     } else if (total < totalJobs && totalJobs > 0) {
       const diff = totalJobs - total;
       bannerText.textContent = \`\${diff} job\${diff === 1 ? "" : "s"} removed from boards since you last loaded.\`;
       banner.classList.add("removed");
       banner.classList.add("visible");
+      totalJobs = total;
     }
   } catch {
     // silently ignore network errors during polling
   }
 }
 
-bannerRefresh.addEventListener("click", () => {
+bannerRefresh.addEventListener("click", async () => {
   banner.classList.remove("visible", "removed");
   currentPage = 1;
+  try {
+    const res = await fetch("/api/count");
+    if (res.ok) ({ total: totalJobs } = await res.json());
+  } catch { /* ignore */ }
   loadPage(1);
 });
 
@@ -850,6 +1182,26 @@ async function initMap() {
 const server = http.createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
 
+  // Health check
+  if (req.method === "GET" && url.pathname === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "ok" }));
+    return;
+  }
+
+  // Config reload
+  if (req.method === "GET" && url.pathname === "/api/reload-config") {
+    try {
+      cachedConfig = loadConfig();
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: String(err) }));
+    }
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/count") {
     const total = getCachedHistory().length;
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -860,12 +1212,60 @@ const server = http.createServer((req, res) => {
   if (req.method === "GET" && url.pathname === "/api/jobs") {
     const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(url.searchParams.get("pageSize") ?? "10", 10)));
-
     const sort = url.searchParams.get("sort") ?? "newest";
     const salaryOnly = url.searchParams.get("salaryOnly") === "1";
+    const search = (url.searchParams.get("search") ?? "").toLowerCase().trim();
+    const sourceFilter = (url.searchParams.get("source") ?? "").toLowerCase().trim();
+    const statusFilter = url.searchParams.get("status") ?? "";
+    const hasScore = url.searchParams.get("hasScore") === "1";
+    const minScore = Math.max(0, parseInt(url.searchParams.get("minScore") ?? "0", 10));
+    const dateFromParam = url.searchParams.get("dateFrom");
+    const dateToParam = url.searchParams.get("dateTo");
+    const dateFrom = dateFromParam ? new Date(dateFromParam).getTime() : 0;
+    const dateTo = dateToParam ? new Date(dateToParam + "T23:59:59").getTime() : 0;
 
     let history = getCachedHistory().slice();
-    if (salaryOnly) history = history.filter(j => j.salary);
+
+    if (search) {
+      history = history.filter(j =>
+        j.title.toLowerCase().includes(search) ||
+        j.company.toLowerCase().includes(search) ||
+        (j.location?.toLowerCase().includes(search) ?? false)
+      );
+    }
+    if (sourceFilter) {
+      history = history.filter(j => j.source.toLowerCase() === sourceFilter);
+    }
+    if (salaryOnly) {
+      history = history.filter(j => j.salary);
+    }
+    if (dateFrom) {
+      history = history.filter(j => j.sentAt >= dateFrom);
+    }
+    if (dateTo) {
+      history = history.filter(j => j.sentAt <= dateTo);
+    }
+
+    const scores = getAllScores();
+    if (hasScore) {
+      history = history.filter(j => scores[j.stateKey] !== undefined);
+    }
+    if (minScore > 0) {
+      history = history.filter(j => {
+        const entry = scores[j.stateKey];
+        return entry !== undefined && entry.score >= minScore;
+      });
+    }
+
+    if (statusFilter) {
+      const apps = getAllApplications();
+      if (statusFilter === "none") {
+        history = history.filter(j => !apps[j.stateKey]);
+      } else {
+        history = history.filter(j => apps[j.stateKey]?.status === statusFilter);
+      }
+    }
+
     if (sort === "salary-desc") {
       history.sort((a, b) => {
         if (a.salaryMin == null && b.salaryMin == null) return 0;
@@ -883,6 +1283,7 @@ const server = http.createServer((req, res) => {
     } else {
       history.sort((a, b) => b.sentAt - a.sentAt);
     }
+
     const total = history.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const start = (page - 1) * pageSize;
@@ -991,6 +1392,119 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Bulk scoring endpoints
+  if (req.method === "POST" && url.pathname === "/api/score-all/start") {
+    const config = getConfig();
+    if (!config.resumePath) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "resumePath not set in config.json" }));
+      return;
+    }
+    if (!config.ollamaModel) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "ollamaModel not set in config.json" }));
+      return;
+    }
+    if (bulkScoreRunning) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true, alreadyRunning: true }));
+      return;
+    }
+    startBulkScore(config).catch(err => console.error("[dashboard] Bulk score error:", err));
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/score-all/status") {
+    if (!bulkScoreState) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ total: 0, scored: 0, done: true, errors: 0, idle: true }));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(bulkScoreState));
+    return;
+  }
+
+  // Application status endpoints
+  if (req.method === "GET" && url.pathname === "/api/application-status") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(getAllApplications()));
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/application-status") {
+    (async () => {
+      let body = "";
+      for await (const chunk of req) body += chunk;
+      let stateKey: string, status: ApplicationStatus;
+      try {
+        ({ stateKey, status } = JSON.parse(body) as { stateKey: string; status: ApplicationStatus });
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid JSON body" }));
+        return;
+      }
+      const validStatuses = ["none", "interested", "applied", "interview", "offer", "rejected"];
+      if (!validStatuses.includes(status)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid status value" }));
+        return;
+      }
+      setApplication(stateKey, status);
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ ok: true }));
+    })().catch(err => {
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(err) }));
+      }
+    });
+    return;
+  }
+
+  // CSV export
+  if (req.method === "GET" && url.pathname === "/api/export.csv") {
+    const history = getCachedHistory();
+    const scores = getAllScores();
+    const apps = getAllApplications();
+
+    const escape = (v: string | number | undefined | null): string => {
+      if (v == null) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const headers = ["title", "company", "source", "location", "salary", "score", "alerted", "status", "url"];
+    const rows = history.map(j => {
+      const scoreEntry = scores[j.stateKey];
+      const appEntry = apps[j.stateKey];
+      return [
+        escape(j.title),
+        escape(j.company),
+        escape(j.source),
+        escape(j.location),
+        escape(j.salary),
+        escape(scoreEntry?.score),
+        escape(new Date(j.sentAt).toISOString()),
+        escape(appEntry?.status ?? "none"),
+        escape(j.url),
+      ].join(",");
+    });
+
+    const csv = [headers.join(","), ...rows].join("\n");
+    res.writeHead(200, {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="jobs.csv"',
+    });
+    res.end(csv);
+    return;
+  }
+
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/index.html")) {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(HTML);
@@ -1005,6 +1519,8 @@ export function startDashboard(): void {
   cachedConfig = loadConfig();
   loadGeocodeCache();
   loadScores();
+  loadApplications();
+  setHistoryChangeListener(() => { historyCache = null; });
   server.listen(PORT, () => {
     console.log(`[dashboard] Listening on http://localhost:${PORT}`);
   });

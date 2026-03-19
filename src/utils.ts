@@ -121,6 +121,18 @@ export function formatSalaryRange(min: number | null, max: number | null): strin
   return undefined;
 }
 
+export function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(parseInt(code, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)));
+}
+
 export function writeFileAtomic(filePath: string, content: string): void {
   const tmp = filePath + ".tmp";
   fs.writeFileSync(tmp, content, "utf-8");

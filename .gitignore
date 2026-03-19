@@ -6,6 +6,7 @@ seen_jobs.json
 job_history.json
 match_scores.json
 geocode_cache.json
-.claude/
 package-lock.json
+application_status.json
+.claude/
 *.txt
