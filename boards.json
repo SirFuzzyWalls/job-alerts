@@ -538,5 +538,13 @@
     "company": "ghr",
     "subdomain": "wd1",
     "careerSite": "Lateral-US"
-  }
+  },
+  {"id":"1password","name":"1password","source":"ashby","slug":"1password"},
+  {"id":"impiricus","name":"Impiricus","source":"greenhouse","slug":"impiricus"},
+  {"id":"mistral","name":"Mistral","source":"lever","slug":"mistral"},
+  {"id":"togetherai","name":"Togetherai","source":"greenhouse","slug":"togetherai"},
+  {"id":"ramp","name":"Ramp","source":"ashby","slug":"ramp"},
+  {"id":"fartherfinance","name":"Fartherfinance","source":"greenhouse","slug":"fartherfinance"},
+  {"id":"parafin","name":"Parafin","source":"ashby","slug":"parafin"},
+  {"id":"horizon3ai","name":"Horizon3ai","source":"ashby","slug":"horizon3ai"}
 ]
